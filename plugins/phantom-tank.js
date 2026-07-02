@@ -2,7 +2,7 @@ registerPlugin({
   id: 'phantom-tank',
   name: '幻影坦克',
   icon: '🎭',
-  badge: '热门',
+  badge: '',
   render(container) {
     container.innerHTML = `
       <h2>🎭 幻影坦克</h2>
