@@ -14,10 +14,11 @@ registerPlugin({
       <div style="margin-bottom:16px; display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
         <label for="phantomAlgoSelect" style="font-weight:600;">🧪 生成算法：</label>
         <select id="phantomAlgoSelect" style="padding:8px 14px; border-radius:8px; border:1px solid var(--border); background:var(--surface2); color:var(--text); font-size:0.9rem;">
-          <option value="advanced">✨ 通道独立法（推荐，重影更少）</option>
-          <option value="classic">🔹 经典亮度法（简单快速）</option>
+          <option value="adaptive">✨ 自适应优化（推荐，双背景最清晰）</option>
+          <option value="advanced">🔹 通道独立法（升级版）</option>
+          <option value="classic">🔸 经典亮度法（原版）</option>
         </select>
-        <span style="font-size:0.8rem; color:var(--text2);">遇到残影时可切换算法或更换图片</span>
+        <span style="font-size:0.8rem; color:var(--text2);">遇到重影时可切换算法或更换图片</span>
       </div>
 
       <div class="upload-grid" style="display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-bottom:20px;">
@@ -75,7 +76,6 @@ registerPlugin({
 
 // ============ 幻影坦克事件与算法 ============
 function initPhantomEvents(container) {
-  // 通用图片加载
   function loadImageFromFile(file) {
     return new Promise((resolve, reject) => {
       const reader = new FileReader();
@@ -90,7 +90,6 @@ function initPhantomEvents(container) {
     });
   }
 
-  // 上传区域初始化
   function setupUpload(zoneId, inputId, clearBtnSelector, onChange) {
     const zone = container.querySelector(`#${zoneId}`);
     const input = container.querySelector(`#${inputId}`);
@@ -153,7 +152,7 @@ function initPhantomEvents(container) {
   const generateBtn = container.querySelector('#phantomGenerateBtn');
   function updateBtn() { generateBtn.disabled = !(surfaceImg && hiddenImg); }
 
-  // ==================== 经典亮度法（原版） ====================
+  // ============ 经典亮度法 ============
   function generatePhantomClassic(surf, hid) {
     const w = Math.min(surf.width, hid.width);
     const h = Math.min(surf.height, hid.height);
@@ -172,13 +171,9 @@ function initPhantomEvents(container) {
       const lumH = 0.299 * hR + 0.587 * hG + 0.114 * hB;
       let alpha = Math.round(255 + lumH - lumS);
       alpha = Math.max(1, Math.min(255, alpha));
-      if (alpha > 0) {
-        op[i] = Math.min(255, Math.round((hR * 255) / alpha));
-        op[i + 1] = Math.min(255, Math.round((hG * 255) / alpha));
-        op[i + 2] = Math.min(255, Math.round((hB * 255) / alpha));
-      } else {
-        op[i] = op[i + 1] = op[i + 2] = 0;
-      }
+      op[i] = Math.min(255, Math.round((hR * 255) / alpha));
+      op[i + 1] = Math.min(255, Math.round((hG * 255) / alpha));
+      op[i + 2] = Math.min(255, Math.round((hB * 255) / alpha));
       op[i + 3] = alpha;
     }
     const outCanvas = document.createElement('canvas'); outCanvas.width = w; outCanvas.height = h;
@@ -186,8 +181,40 @@ function initPhantomEvents(container) {
     return outCanvas.toDataURL('image/png');
   }
 
-  // ==================== 通道独立 Alpha 法（升级版） ====================
+  // ============ 通道独立法（取中位数） ============
   function generatePhantomAdvanced(surf, hid) {
+    const w = Math.min(surf.width, hid.width);
+    const h = Math.min(surf.height, hid.height);
+    const surfCanvas = document.createElement('canvas'); surfCanvas.width = w; surfCanvas.height = h;
+    const sCtx = surfCanvas.getContext('2d'); sCtx.drawImage(surf, 0, 0, w, h);
+    const sData = sCtx.getImageData(0, 0, w, h);
+    const hidCanvas = document.createElement('canvas'); hidCanvas.width = w; hidCanvas.height = h;
+    const hCtx = hidCanvas.getContext('2d'); hCtx.drawImage(hid, 0, 0, w, h);
+    const hData = hCtx.getImageData(0, 0, w, h);
+    const out = new ImageData(w, h);
+    const sp = sData.data, hp = hData.data, op = out.data;
+    for (let i = 0; i < sp.length; i += 4) {
+      const Rs = sp[i], Gs = sp[i + 1], Bs = sp[i + 2];
+      const Rh = hp[i], Gh = hp[i + 1], Bh = hp[i + 2];
+      const calcAlpha = (rh, rs) => Math.max(1, Math.min(255, Math.round(rh - rs + 255)));
+      const Ar = calcAlpha(Rh, Rs);
+      const Ag = calcAlpha(Gh, Gs);
+      const Ab = calcAlpha(Bh, Bs);
+      const sorted = [Ar, Ag, Ab].sort((a, b) => a - b);
+      const A = sorted[1]; // 中位数
+      const calcRGB = (rh) => Math.max(0, Math.min(255, Math.round((rh * 255) / A)));
+      op[i] = calcRGB(Rh);
+      op[i + 1] = calcRGB(Gh);
+      op[i + 2] = calcRGB(Bh);
+      op[i + 3] = A;
+    }
+    const outCanvas = document.createElement('canvas'); outCanvas.width = w; outCanvas.height = h;
+    outCanvas.getContext('2d').putImageData(out, 0, 0);
+    return outCanvas.toDataURL('image/png');
+  }
+
+  // ============ 自适应最优化法（新增，双背景最清晰） ============
+  function generatePhantomAdaptive(surf, hid) {
     const w = Math.min(surf.width, hid.width);
     const h = Math.min(surf.height, hid.height);
     const surfCanvas = document.createElement('canvas'); surfCanvas.width = w; surfCanvas.height = h;
@@ -203,26 +230,47 @@ function initPhantomEvents(container) {
       const Rs = sp[i], Gs = sp[i + 1], Bs = sp[i + 2];
       const Rh = hp[i], Gh = hp[i + 1], Bh = hp[i + 2];
 
-      // 对每个通道计算最优 Alpha（白底准确公式推导）
-      // 黑底： (R * A)/255 = Rh  =>  R = Rh * 255 / A
-      // 白底： (R * A)/255 + 255 - A = Rs  =>  代入R得 Rh + 255 - A = Rs  =>  A = Rh - Rs + 255
-      const calcAlpha = (rh, rs) => {
-        let a = rh - rs + 255;
-        return Math.max(1, Math.min(255, Math.round(a)));
-      };
+      // 计算每个通道的独立 Alpha（保证黑底绝对准确的前提下）
+      const calcAlpha = (rh, rs) => Math.max(1, Math.min(255, Math.round(rh - rs + 255)));
       const Ar = calcAlpha(Rh, Rs);
       const Ag = calcAlpha(Gh, Gs);
       const Ab = calcAlpha(Bh, Bs);
+      const avgA = Math.round((Ar + Ag + Ab) / 3);
 
-      // 取三个 Alpha 的中位数，以获得最稳定的视觉效果
-      const alphas = [Ar, Ag, Ab].sort((a, b) => a - b);
-      const A = alphas[1]; // 中位数
+      // 候选 Alpha 列表
+      const candidates = [Ar, Ag, Ab, avgA].filter((a, idx, arr) => 
+        a >= 1 && a <= 255 && arr.indexOf(a) === idx
+      ); // 去重
 
-      // 以黑底正确为目标，用统一 Alpha 计算 RGB
-      const calcRGB = (rh) => Math.max(0, Math.min(255, Math.round((rh * 255) / A)));
-      const R = calcRGB(Rh);
-      const G = calcRGB(Gh);
-      const B = calcRGB(Bh);
+      // 搜索最佳 Alpha，使白底预测颜色与表面图差异最小
+      let bestA = candidates[0];
+      let bestError = Infinity;
+
+      for (const A of candidates) {
+        // 黑底准确式：R = Rh * 255 / A
+        const R = Math.max(0, Math.min(255, Math.round((Rh * 255) / A)));
+        const G = Math.max(0, Math.min(255, Math.round((Gh * 255) / A)));
+        const B = Math.max(0, Math.min(255, Math.round((Bh * 255) / A)));
+
+        // 预测白底显示颜色
+        const Rp = Math.round((R * A) / 255 + 255 - A);
+        const Gp = Math.round((G * A) / 255 + 255 - A);
+        const Bp = Math.round((B * A) / 255 + 255 - A);
+
+        // 计算与表面图的欧氏距离平方（视觉误差）
+        const error = (Rp - Rs) ** 2 + (Gp - Gs) ** 2 + (Bp - Bs) ** 2;
+
+        if (error < bestError) {
+          bestError = error;
+          bestA = A;
+        }
+      }
+
+      // 使用最优 Alpha 计算最终颜色
+      const A = bestA;
+      const R = Math.max(0, Math.min(255, Math.round((Rh * 255) / A)));
+      const G = Math.max(0, Math.min(255, Math.round((Gh * 255) / A)));
+      const B = Math.max(0, Math.min(255, Math.round((Bh * 255) / A)));
 
       op[i] = R;
       op[i + 1] = G;
@@ -235,15 +283,20 @@ function initPhantomEvents(container) {
     return outCanvas.toDataURL('image/png');
   }
 
-  // 生成按钮点击
+  // 生成按钮
   generateBtn.addEventListener('click', () => {
     if (!surfaceImg || !hiddenImg) return;
     try {
       const algoSelect = container.querySelector('#phantomAlgoSelect');
-      const algo = algoSelect ? algoSelect.value : 'advanced';
-      const dataUrl = (algo === 'classic')
-        ? generatePhantomClassic(surfaceImg, hiddenImg)
-        : generatePhantomAdvanced(surfaceImg, hiddenImg);
+      const algo = algoSelect ? algoSelect.value : 'adaptive';
+      let dataUrl;
+      if (algo === 'classic') {
+        dataUrl = generatePhantomClassic(surfaceImg, hiddenImg);
+      } else if (algo === 'advanced') {
+        dataUrl = generatePhantomAdvanced(surfaceImg, hiddenImg);
+      } else {
+        dataUrl = generatePhantomAdaptive(surfaceImg, hiddenImg);
+      }
 
       const resultArea = container.querySelector('#phantomResultArea');
       resultArea.style.display = 'block';
@@ -260,7 +313,6 @@ function initPhantomEvents(container) {
     }
   });
 
-  // 背景色滑动条
   const slider = container.querySelector('#phantomBgSlider');
   const sliderPreview = container.querySelector('#phantomSliderPreview');
   function updateSliderBg(val) {
@@ -269,7 +321,6 @@ function initPhantomEvents(container) {
   }
   slider.addEventListener('input', () => updateSliderBg(parseInt(slider.value)));
 
-  // 重新生成按钮
   container.querySelector('#phantomRetryBtn').addEventListener('click', () => {
     container.querySelector('#phantomResultArea').style.display = 'none';
   });
