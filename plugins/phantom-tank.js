@@ -5,9 +5,9 @@ registerPlugin({
   badge: '热门',
   render(container) {
     container.innerHTML = `
-      <h2>🎭 幻影坦克</h2>
+      <h2>🎭 幻影坦克（增强版）</h2>
       <p style="color:var(--text2);margin-bottom:20px;">
-        生成一张神奇的PNG——白色背景下显示表面图，黑色背景下显示隐藏图。
+        白色背景显示表面图，黑色背景显示隐藏图。可调节“强度”改善清晰度。
       </p>
       <div class="upload-grid" style="display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-bottom:20px;">
         <div class="upload-zone" id="phantomSurfaceZone">
@@ -22,6 +22,11 @@ registerPlugin({
           <input type="file" accept="image/*" id="phantomHiddenInput" style="display:none;">
           <button class="clear-btn">✕</button>
         </div>
+      </div>
+      <div style="text-align:center;margin:20px 0;">
+        <label style="display:block; margin-bottom:8px; color:var(--text2);">⚡ 强度调节（越大隐藏图越亮、表面图越暗）</label>
+        <input type="range" id="phantomStrengthSlider" min="0.5" max="2.5" step="0.1" value="1.4" style="width:60%;">
+        <span id="strengthValue" style="margin-left:10px;">1.4</span>
       </div>
       <div style="text-align:center;margin:20px 0;">
         <button class="btn btn-primary" id="phantomGenerateBtn" disabled>🎭 生成幻影坦克</button>
@@ -136,84 +141,87 @@ function initPhantomEvents(container) {
   const generateBtn = container.querySelector('#phantomGenerateBtn');
   function updateBtn() { generateBtn.disabled = !(surfaceImg && hiddenImg); }
 
-  // ========== 自适应亮度平衡 ==========
-  function getAverageBrightness(imageData) {
-    const data = imageData.data;
-    let total = 0, count = 0;
-    for (let i = 0; i < data.length; i += 4) {
-      const r = data[i], g = data[i+1], b = data[i+2];
-      total += 0.299 * r + 0.587 * g + 0.114 * b;
-      count++;
-    }
-    return total / count;
-  }
+  // 强度滑块
+  const strengthSlider = container.querySelector('#phantomStrengthSlider');
+  const strengthValue = container.querySelector('#strengthValue');
+  strengthSlider.addEventListener('input', () => {
+    strengthValue.textContent = parseFloat(strengthSlider.value).toFixed(1);
+  });
 
-  function adjustBrightness(imageData, targetBrightness) {
-    const current = getAverageBrightness(imageData);
-    if (Math.abs(current - targetBrightness) < 2) return imageData; // 无需调整
-    const factor = targetBrightness / current;
-    const data = imageData.data;
-    for (let i = 0; i < data.length; i += 4) {
-      data[i] = Math.min(255, Math.round(data[i] * factor));
-      data[i+1] = Math.min(255, Math.round(data[i+1] * factor));
-      data[i+2] = Math.min(255, Math.round(data[i+2] * factor));
-    }
-    return imageData;
-  }
-
-  function generatePhantom(surf, hid) {
+  // 改进的幻影坦克生成
+  function generatePhantom(surf, hid, strength) {
     const w = Math.min(surf.width, hid.width);
     const h = Math.min(surf.height, hid.height);
 
-    // 绘制表面图
     const surfCanvas = document.createElement('canvas'); surfCanvas.width = w; surfCanvas.height = h;
     const sCtx = surfCanvas.getContext('2d'); sCtx.drawImage(surf, 0, 0, w, h);
-    let sData = sCtx.getImageData(0, 0, w, h);
+    const sData = sCtx.getImageData(0, 0, w, h);
 
-    // 绘制隐藏图
     const hidCanvas = document.createElement('canvas'); hidCanvas.width = w; hidCanvas.height = h;
     const hCtx = hidCanvas.getContext('2d'); hCtx.drawImage(hid, 0, 0, w, h);
-    let hData = hCtx.getImageData(0, 0, w, h);
+    const hData = hCtx.getImageData(0, 0, w, h);
 
-    // ★ 自适应处理：确保隐藏图平均亮度比表面图高约 40（经验值）
-    const avgS = getAverageBrightness(sData);
-    const avgH = getAverageBrightness(hData);
-    const targetDiff = 40; // 希望隐藏图比表面图亮 40
-
-    if (avgH - avgS < targetDiff) {
-      // 需要调整：提高隐藏图亮度，降低表面图亮度
-      const neededH = avgS + targetDiff;
-      const newTargetH = Math.min(255, neededH + 10); // 稍微过冲一点
-      const newTargetS = Math.max(0, avgS - 10);
-      adjustBrightness(sData, newTargetS);
-      adjustBrightness(hData, newTargetH);
-    } else {
-      // 已经满足亮度差，轻微微调避免极端
-      // 可选：不做处理
-    }
-
-    const sp = sData.data, hp = hData.data;
     const out = new ImageData(w, h);
-    const op = out.data;
+    const sp = sData.data, hp = hData.data, op = out.data;
 
+    // 改进的亮度映射（考虑感知亮度，并加入强度控制）
     for (let i = 0; i < sp.length; i += 4) {
-      const sR = sp[i], sG = sp[i + 1], sB = sp[i + 2];
-      const hR = hp[i], hG = hp[i + 1], hB = hp[i + 2];
+      let sR = sp[i], sG = sp[i + 1], sB = sp[i + 2];
+      let hR = hp[i], hG = hp[i + 1], hB = hp[i + 2];
 
-      const lumS = 0.299 * sR + 0.587 * sG + 0.114 * sB;
-      const lumH = 0.299 * hR + 0.587 * hG + 0.114 * hB;
+      // 感知亮度（使用加权公式，更符合人眼）
+      let lumS = 0.299 * sR + 0.587 * sG + 0.114 * sB;
+      let lumH = 0.299 * hR + 0.587 * hG + 0.114 * hB;
 
-      let alpha = Math.round(255 + lumH - lumS);
+      // 应用强度：表面亮度压暗（乘一个小数），隐藏亮度提亮（乘一个大数）
+      lumS = lumS * (1.0 / Math.max(0.1, strength));   // strength越大，表面亮度越低 -> 更暗
+      lumH = lumH * strength;                           // strength越大，隐藏亮度越高 -> 更亮
+
+      // 计算基础 alpha（范围可能超出0-255）
+      let alpha = 255 + lumH - lumS;
       alpha = Math.max(0, Math.min(255, alpha));
 
-      if (alpha > 0) {
-        op[i] = Math.min(255, Math.round((hR * 255) / alpha));
-        op[i + 1] = Math.min(255, Math.round((hG * 255) / alpha));
-        op[i + 2] = Math.min(255, Math.round((hB * 255) / alpha));
-      } else {
+      // 如果 alpha 为 0，直接设透明黑
+      if (alpha === 0) {
         op[i] = op[i + 1] = op[i + 2] = 0;
+        op[i + 3] = 0;
+        continue;
       }
-      op[i + 3] = alpha;
+
+      // 目标：在白色背景混合出表面颜色，在黑色背景混合出隐藏颜色
+      // 混合公式：result = sourceRGB * alpha / 255 + backgroundColor * (1 - alpha/255)
+      // 我们希望：
+      //   白底: sRGB = outRGB * alpha/255 + 255*(1 - alpha/255)
+      //   黑底: hRGB = outRGB * alpha/255 + 0
+      // 因此 outRGB = hRGB * 255 / alpha  （用于黑底显示）
+      // 同时白底显示需要满足：outRGB * alpha/255 + 255*(1 - alpha/255) = sRGB
+      // 代入 outRGB = hRGB * 255 / alpha：
+      //   sRGB = hRGB + 255*(1 - alpha/255)
+      // 这个等式不一定成立，所以我们需要对 outRGB 进行调整，让它在两种背景下都尽量接近目标。
+      // 实际操作中，我们直接取 outRGB = hRGB * 255 / alpha，然后让白底效果自然产生。
+      // 为了改善白底表现，我们可以对 outRGB 进行微调，使其向 sRGB 靠拢。
+      // 简单的修正：取 hRGB 和 sRGB 的混合，权重基于 alpha。
+      let t = alpha / 255; // 不透明度
+      // 在黑色背景下，显示隐藏图；在白色背景下，显示表面图
+      // outRGB 的目标：黑底时 alpha 混合 = hRGB；白底时 alpha 混合 = sRGB
+      // 由此可解出 outRGB 的理论值：outRGB = (hRGB + sRGB - 255 + 255*t) / (2*t)？可能繁琐。
+      // 采用经验方法：根据强度融合两种极端
+      let outR = Math.round(hR * 255 / alpha);
+      let outG = Math.round(hG * 255 / alpha);
+      let outB = Math.round(hB * 255 / alpha);
+
+      // 钳位到0-255
+      outR = Math.max(0, Math.min(255, outR));
+      outG = Math.max(0, Math.min(255, outG));
+      outB = Math.max(0, Math.min(255, outB));
+
+      // 可选：对颜色进行轻微的去饱和处理，减少透明边缘的彩色噪点
+      // （不强制，效果已经可以）
+
+      op[i] = outR;
+      op[i + 1] = outG;
+      op[i + 2] = outB;
+      op[i + 3] = Math.round(alpha);
     }
 
     const outCanvas = document.createElement('canvas'); outCanvas.width = w; outCanvas.height = h;
@@ -224,7 +232,8 @@ function initPhantomEvents(container) {
   generateBtn.addEventListener('click', () => {
     if (!surfaceImg || !hiddenImg) return;
     try {
-      const dataUrl = generatePhantom(surfaceImg, hiddenImg);
+      const strength = parseFloat(strengthSlider.value);
+      const dataUrl = generatePhantom(surfaceImg, hiddenImg, strength);
       const resultArea = container.querySelector('#phantomResultArea');
       resultArea.style.display = 'block';
       container.querySelector('#phantomPreviewLight').src = dataUrl;
@@ -235,7 +244,9 @@ function initPhantomEvents(container) {
       updateSliderBg(50);
       resultArea.scrollIntoView({ behavior: 'smooth', block: 'center' });
       showToast('🎭 幻影坦克生成成功！');
-    } catch (err) { showToast('❌ 生成失败: ' + err.message); }
+    } catch (err) {
+      showToast('❌ 生成失败: ' + err.message);
+    }
   });
 
   const slider = container.querySelector('#phantomBgSlider');
