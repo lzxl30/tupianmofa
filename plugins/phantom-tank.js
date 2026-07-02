@@ -7,7 +7,7 @@ registerPlugin({
     container.innerHTML = `
       <h2>🎭 幻影坦克</h2>
       <p style="color:var(--text2);margin-bottom:20px;">
-        生成一张神奇的PNG——<strong>白色背景下完美显示表面图</strong>，<strong>黑色背景下完美显示隐藏图</strong>，无残影。
+        生成一张神奇的PNG——<strong>白色背景下清晰显示表面图</strong>，<strong>黑色背景下完美显示隐藏图</strong>。
       </p>
       <div class="upload-grid" style="display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-bottom:20px;">
         <div class="upload-zone" id="phantomSurfaceZone">
@@ -31,11 +31,11 @@ registerPlugin({
         <div class="phantom-previews" style="display:flex; gap:16px; justify-content:center; margin:16px 0;">
           <div style="background:#fff; padding:12px; border-radius:8px; max-width:200px;">
             <img id="phantomPreviewLight" style="max-width:100%;">
-            <p style="color:#333; font-size:0.8rem;">⬜ 白色背景</p>
+            <p style="color:#333; font-size:0.8rem;">⬜ 白色背景（表面图）</p>
           </div>
           <div style="background:#111; padding:12px; border-radius:8px; max-width:200px;">
             <img id="phantomPreviewDark" style="max-width:100%;">
-            <p style="color:#ddd; font-size:0.8rem;">⬛ 黑色背景</p>
+            <p style="color:#ddd; font-size:0.8rem;">⬛ 黑色背景（隐藏图）</p>
           </div>
         </div>
         <div>
@@ -51,7 +51,7 @@ registerPlugin({
         </div>
       </div>
       <div class="tip-bar">
-        💡 <strong>提示：</strong>发送到微信/QQ，缩略图显示表面图，点开大图显示隐藏图。务必保存为PNG！
+        💡 <strong>提示：</strong>为保证清晰度，表面图的暗部会被自动提亮。发送到微信/QQ时务必以<strong>PNG原图</strong>传输。
       </div>
     `;
     initPhantomEvents(container);
@@ -60,7 +60,6 @@ registerPlugin({
 });
 
 function initPhantomEvents(container) {
-  // 通用图片加载函数
   function loadImageFromFile(file) {
     return new Promise((resolve, reject) => {
       const reader = new FileReader();
@@ -75,7 +74,6 @@ function initPhantomEvents(container) {
     });
   }
 
-  // 上传区域初始化
   function setupUpload(zoneId, inputId, clearBtnSelector, onChange) {
     const zone = container.querySelector(`#${zoneId}`);
     const input = container.querySelector(`#${inputId}`);
@@ -149,12 +147,11 @@ function initPhantomEvents(container) {
     generateBtn.disabled = !(surfaceImg && hiddenImg);
   }
 
-  // 核心算法：像素级精确解，完美分离两个背景
+  // 优化算法：保证白色背景下清晰
   function generatePhantom(surfaceImg, hiddenImg) {
     const w = Math.min(surfaceImg.width, hiddenImg.width);
     const h = Math.min(surfaceImg.height, hiddenImg.height);
 
-    // 获取两张图缩放后的像素数据
     const getData = (img) => {
       const c = document.createElement('canvas');
       c.width = w;
@@ -171,20 +168,24 @@ function initPhantomEvents(container) {
     const op = out.data;
 
     for (let i = 0; i < surf.length; i += 4) {
-      const sR = surf[i], sG = surf[i + 1], sB = surf[i + 2];
+      let sR = surf[i], sG = surf[i + 1], sB = surf[i + 2];
       const hR = hide[i], hG = hide[i + 1], hB = hide[i + 2];
 
-      // 每个通道独立计算所需的 alpha
+      // 保证表面图每个通道 ≥ 隐藏图，否则提亮表面图
+      sR = Math.max(sR, hR);
+      sG = Math.max(sG, hG);
+      sB = Math.max(sB, hB);
+
+      // 计算每个通道所需 alpha
       const aR = 255 - (sR - hR);
       const aG = 255 - (sG - hG);
       const aB = 255 - (sB - hB);
 
-      // 取最大 alpha 保证三个通道在白色背景下都不溢出
-      let alpha = Math.max(aR, aG, aB, 0);
-      alpha = Math.min(255, alpha);
+      // 取最小 alpha（避免过度透明导致表面图变淡）
+      let alpha = Math.min(aR, aG, aB);
+      alpha = Math.max(0, Math.min(255, alpha));
 
       if (alpha > 0) {
-        // 反推原始颜色 C = (隐藏色 * 255) / alpha
         op[i]     = Math.min(255, Math.round((hR * 255) / alpha));
         op[i + 1] = Math.min(255, Math.round((hG * 255) / alpha));
         op[i + 2] = Math.min(255, Math.round((hB * 255) / alpha));
@@ -201,7 +202,6 @@ function initPhantomEvents(container) {
     return outCanvas.toDataURL('image/png');
   }
 
-  // 生成按钮事件
   generateBtn.addEventListener('click', () => {
     if (!surfaceImg || !hiddenImg) return;
     try {
@@ -221,7 +221,6 @@ function initPhantomEvents(container) {
     }
   });
 
-  // 背景渐变滑块
   const slider = container.querySelector('#phantomBgSlider');
   const sliderPreview = container.querySelector('#phantomSliderPreview');
   function updateSliderBg(val) {
