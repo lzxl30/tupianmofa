@@ -4,7 +4,7 @@ const PLUGIN_LIST = [
     name: '幻影坦克',
     icon: '🎭',
     script: 'plugins/phantom-tank.js',
-    badge: ''
+    badge: '热门'
   },
   {
     id: 'lsb-stego',
