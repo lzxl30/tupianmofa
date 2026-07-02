@@ -1,4 +1,3 @@
-// 插件清单：每添加一个新玩法，只需在此追加一个对象，并创建对应的插件JS文件
 const PLUGIN_LIST = [
   {
     id: 'phantom-tank',
@@ -14,12 +13,6 @@ const PLUGIN_LIST = [
     script: 'plugins/lsb-stego.js',
     badge: ''
   }
-  // 未来添加示例：
-  // {
-  //   id: 'ascii-art',
-  //   name: 'ASCII 艺术',
-  //   icon: '📝',
-  //   script: 'plugins/ascii-art.js',
-  //   badge: '新'
-  // }
+  // 新增玩法示例：
+  // { id: 'ascii-art', name: 'ASCII 艺术', icon: '📝', script: 'plugins/ascii-art.js', badge: '新' }
 ];
