@@ -1,4 +1,4 @@
-// ==================== 核心框架：插件加载 & 标星置顶 & 统一描述下载 ====================
+// ==================== 核心框架：插件加载 & 标星置顶 & 自动描述下载 ====================
 const STORAGE_KEY = 'toolbox_starred_plugins';
 
 // 收藏管理
@@ -111,6 +111,9 @@ function switchToPlugin(pluginId) {
   panel.innerHTML = '';
   plugin.render(panel);
   currentPlugin = plugin;
+
+  // 为该面板启动自动描述注入观察器
+  observePanelForDownloadableImages(panel);
 }
 
 // 加载所有插件脚本
@@ -179,13 +182,11 @@ function addDescriptionToImage(imageDataUrl, description) {
       const bgWidth = textWidth + paddingX * 2;
       const bgHeight = fontSize + paddingY * 2;
 
-      // 半透明圆角背景
       ctx.fillStyle = 'rgba(0,0,0,0.65)';
       ctx.beginPath();
       ctx.roundRect(bgX, bgY, bgWidth, bgHeight, fontSize * 0.3);
       ctx.fill();
 
-      // 白色文字
       ctx.fillStyle = '#ffffff';
       ctx.textBaseline = 'bottom';
       ctx.textAlign = 'left';
@@ -199,17 +200,23 @@ function addDescriptionToImage(imageDataUrl, description) {
 }
 
 /**
- * 在父容器中创建统一的描述+下载UI
- * @param {HTMLElement} parentElement - 要插入的容器
- * @param {string|function} imageUrlOrGetter - 图片DataURL，或返回DataURL的函数
- * @param {string} downloadFileName - 下载文件名
- * @returns {{ descriptionInput, downloadButton }}
+ * 在指定容器中创建描述+下载UI，并自动关联容器内的第一张图片
  */
-function createDownloadUI(parentElement, imageUrlOrGetter, downloadFileName = 'image.png') {
+function injectDownloadUI(container) {
+  // 防止重复注入
+  if (container.querySelector('.auto-download-ui')) return null;
+
+  const img = container.querySelector('img');
+  if (!img) return null;
+
+  const uiContainer = document.createElement('div');
+  uiContainer.className = 'auto-download-ui';
+  uiContainer.style.marginTop = '12px';
+
   const descInput = document.createElement('input');
   descInput.type = 'text';
   descInput.placeholder = '添加描述（显示在图片左下角）';
-  descInput.style.cssText = 'width:100%; max-width:320px; padding:8px 12px; border-radius:20px; border:1px solid var(--border); background:var(--surface2); color:var(--text); font-size:0.85rem; outline:none; margin-top:10px;';
+  descInput.style.cssText = 'width:100%; max-width:320px; padding:8px 12px; border-radius:20px; border:1px solid var(--border); background:var(--surface2); color:var(--text); font-size:0.85rem; outline:none;';
 
   const downloadBtn = document.createElement('button');
   downloadBtn.className = 'btn btn-accent';
@@ -217,12 +224,7 @@ function createDownloadUI(parentElement, imageUrlOrGetter, downloadFileName = 'i
   downloadBtn.style.marginTop = '8px';
 
   downloadBtn.addEventListener('click', async () => {
-    let imageUrl;
-    if (typeof imageUrlOrGetter === 'function') {
-      imageUrl = imageUrlOrGetter();
-    } else {
-      imageUrl = imageUrlOrGetter;
-    }
+    const imageUrl = img.src;
     if (!imageUrl) {
       showToast('暂无图片可下载');
       return;
@@ -231,12 +233,46 @@ function createDownloadUI(parentElement, imageUrlOrGetter, downloadFileName = 'i
     const finalUrl = await addDescriptionToImage(imageUrl, desc);
     const a = document.createElement('a');
     a.href = finalUrl;
-    a.download = downloadFileName;
+    a.download = 'image.png';
     a.click();
   });
 
-  parentElement.appendChild(descInput);
-  parentElement.appendChild(downloadBtn);
+  uiContainer.appendChild(descInput);
+  uiContainer.appendChild(downloadBtn);
+  container.appendChild(uiContainer);
 
-  return { descriptionInput: descInput, downloadButton: downloadBtn };
+  return { descInput, downloadBtn };
+}
+
+/**
+ * 监视面板中出现的 .result-area.show，自动注入描述下载UI
+ */
+function observePanelForDownloadableImages(panel) {
+  // 断开旧的观察器（如果存在）
+  if (panel._downloadObserver) {
+    panel._downloadObserver.disconnect();
+  }
+
+  const observer = new MutationObserver(() => {
+    // 查找所有已显示的结果区域
+    const resultAreas = panel.querySelectorAll('.result-area.show, .result-area[style*="display: block"]');
+    resultAreas.forEach(area => {
+      injectDownloadUI(area);
+    });
+  });
+
+  observer.observe(panel, {
+    childList: true,
+    subtree: true,
+    attributes: true,
+    attributeFilter: ['class', 'style']
+  });
+
+  panel._downloadObserver = observer;
+
+  // 立即处理已经存在的结果区域（比如插件在 render 时直接显示了结果）
+  const existingAreas = panel.querySelectorAll('.result-area.show, .result-area[style*="display: block"]');
+  existingAreas.forEach(area => {
+    injectDownloadUI(area);
+  });
 }
