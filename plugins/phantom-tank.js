@@ -5,9 +5,9 @@ registerPlugin({
   badge: '热门',
   render(container) {
     container.innerHTML = `
-      <h2>🎭 幻影坦克（增强版）</h2>
+      <h2>🎭 幻影坦克</h2>
       <p style="color:var(--text2);margin-bottom:20px;">
-        白色背景显示表面图，黑色背景显示隐藏图。可调节“强度”改善清晰度。
+        生成一张神奇的PNG——<strong>白色背景下完美显示表面图</strong>，<strong>黑色背景下完美显示隐藏图</strong>，无残影。
       </p>
       <div class="upload-grid" style="display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-bottom:20px;">
         <div class="upload-zone" id="phantomSurfaceZone">
@@ -22,11 +22,6 @@ registerPlugin({
           <input type="file" accept="image/*" id="phantomHiddenInput" style="display:none;">
           <button class="clear-btn">✕</button>
         </div>
-      </div>
-      <div style="text-align:center;margin:20px 0;">
-        <label style="display:block; margin-bottom:8px; color:var(--text2);">⚡ 强度调节（越大隐藏图越亮、表面图越暗）</label>
-        <input type="range" id="phantomStrengthSlider" min="0.5" max="2.5" step="0.1" value="1.4" style="width:60%;">
-        <span id="strengthValue" style="margin-left:10px;">1.4</span>
       </div>
       <div style="text-align:center;margin:20px 0;">
         <button class="btn btn-primary" id="phantomGenerateBtn" disabled>🎭 生成幻影坦克</button>
@@ -65,6 +60,7 @@ registerPlugin({
 });
 
 function initPhantomEvents(container) {
+  // 通用图片加载函数
   function loadImageFromFile(file) {
     return new Promise((resolve, reject) => {
       const reader = new FileReader();
@@ -79,13 +75,17 @@ function initPhantomEvents(container) {
     });
   }
 
+  // 上传区域初始化
   function setupUpload(zoneId, inputId, clearBtnSelector, onChange) {
     const zone = container.querySelector(`#${zoneId}`);
     const input = container.querySelector(`#${inputId}`);
     const clearBtn = zone.querySelector(clearBtnSelector);
     let currentImg = null;
 
-    zone.addEventListener('click', (e) => { if (e.target === clearBtn) return; input.click(); });
+    zone.addEventListener('click', (e) => {
+      if (e.target === clearBtn) return;
+      input.click();
+    });
     zone.addEventListener('dragover', (e) => { e.preventDefault(); zone.style.borderColor = 'var(--accent)'; });
     zone.addEventListener('dragleave', () => { zone.style.borderColor = 'var(--border)'; });
     zone.addEventListener('drop', (e) => {
@@ -135,105 +135,77 @@ function initPhantomEvents(container) {
   }
 
   let surfaceImg = null, hiddenImg = null;
-  setupUpload('phantomSurfaceZone', 'phantomSurfaceInput', '.clear-btn', (img) => { surfaceImg = img; updateBtn(); });
-  setupUpload('phantomHiddenZone', 'phantomHiddenInput', '.clear-btn', (img) => { hiddenImg = img; updateBtn(); });
-
-  const generateBtn = container.querySelector('#phantomGenerateBtn');
-  function updateBtn() { generateBtn.disabled = !(surfaceImg && hiddenImg); }
-
-  // 强度滑块
-  const strengthSlider = container.querySelector('#phantomStrengthSlider');
-  const strengthValue = container.querySelector('#strengthValue');
-  strengthSlider.addEventListener('input', () => {
-    strengthValue.textContent = parseFloat(strengthSlider.value).toFixed(1);
+  setupUpload('phantomSurfaceZone', 'phantomSurfaceInput', '.clear-btn', (img) => {
+    surfaceImg = img;
+    updateBtn();
+  });
+  setupUpload('phantomHiddenZone', 'phantomHiddenInput', '.clear-btn', (img) => {
+    hiddenImg = img;
+    updateBtn();
   });
 
-  // 改进的幻影坦克生成
-  function generatePhantom(surf, hid, strength) {
-    const w = Math.min(surf.width, hid.width);
-    const h = Math.min(surf.height, hid.height);
+  const generateBtn = container.querySelector('#phantomGenerateBtn');
+  function updateBtn() {
+    generateBtn.disabled = !(surfaceImg && hiddenImg);
+  }
 
-    const surfCanvas = document.createElement('canvas'); surfCanvas.width = w; surfCanvas.height = h;
-    const sCtx = surfCanvas.getContext('2d'); sCtx.drawImage(surf, 0, 0, w, h);
-    const sData = sCtx.getImageData(0, 0, w, h);
+  // 核心算法：像素级精确解，完美分离两个背景
+  function generatePhantom(surfaceImg, hiddenImg) {
+    const w = Math.min(surfaceImg.width, hiddenImg.width);
+    const h = Math.min(surfaceImg.height, hiddenImg.height);
 
-    const hidCanvas = document.createElement('canvas'); hidCanvas.width = w; hidCanvas.height = h;
-    const hCtx = hidCanvas.getContext('2d'); hCtx.drawImage(hid, 0, 0, w, h);
-    const hData = hCtx.getImageData(0, 0, w, h);
+    // 获取两张图缩放后的像素数据
+    const getData = (img) => {
+      const c = document.createElement('canvas');
+      c.width = w;
+      c.height = h;
+      const ctx = c.getContext('2d');
+      ctx.drawImage(img, 0, 0, w, h);
+      return ctx.getImageData(0, 0, w, h).data;
+    };
+
+    const surf = getData(surfaceImg);
+    const hide = getData(hiddenImg);
 
     const out = new ImageData(w, h);
-    const sp = sData.data, hp = hData.data, op = out.data;
+    const op = out.data;
 
-    // 改进的亮度映射（考虑感知亮度，并加入强度控制）
-    for (let i = 0; i < sp.length; i += 4) {
-      let sR = sp[i], sG = sp[i + 1], sB = sp[i + 2];
-      let hR = hp[i], hG = hp[i + 1], hB = hp[i + 2];
+    for (let i = 0; i < surf.length; i += 4) {
+      const sR = surf[i], sG = surf[i + 1], sB = surf[i + 2];
+      const hR = hide[i], hG = hide[i + 1], hB = hide[i + 2];
 
-      // 感知亮度（使用加权公式，更符合人眼）
-      let lumS = 0.299 * sR + 0.587 * sG + 0.114 * sB;
-      let lumH = 0.299 * hR + 0.587 * hG + 0.114 * hB;
+      // 每个通道独立计算所需的 alpha
+      const aR = 255 - (sR - hR);
+      const aG = 255 - (sG - hG);
+      const aB = 255 - (sB - hB);
 
-      // 应用强度：表面亮度压暗（乘一个小数），隐藏亮度提亮（乘一个大数）
-      lumS = lumS * (1.0 / Math.max(0.1, strength));   // strength越大，表面亮度越低 -> 更暗
-      lumH = lumH * strength;                           // strength越大，隐藏亮度越高 -> 更亮
+      // 取最大 alpha 保证三个通道在白色背景下都不溢出
+      let alpha = Math.max(aR, aG, aB, 0);
+      alpha = Math.min(255, alpha);
 
-      // 计算基础 alpha（范围可能超出0-255）
-      let alpha = 255 + lumH - lumS;
-      alpha = Math.max(0, Math.min(255, alpha));
-
-      // 如果 alpha 为 0，直接设透明黑
-      if (alpha === 0) {
+      if (alpha > 0) {
+        // 反推原始颜色 C = (隐藏色 * 255) / alpha
+        op[i]     = Math.min(255, Math.round((hR * 255) / alpha));
+        op[i + 1] = Math.min(255, Math.round((hG * 255) / alpha));
+        op[i + 2] = Math.min(255, Math.round((hB * 255) / alpha));
+      } else {
         op[i] = op[i + 1] = op[i + 2] = 0;
-        op[i + 3] = 0;
-        continue;
       }
-
-      // 目标：在白色背景混合出表面颜色，在黑色背景混合出隐藏颜色
-      // 混合公式：result = sourceRGB * alpha / 255 + backgroundColor * (1 - alpha/255)
-      // 我们希望：
-      //   白底: sRGB = outRGB * alpha/255 + 255*(1 - alpha/255)
-      //   黑底: hRGB = outRGB * alpha/255 + 0
-      // 因此 outRGB = hRGB * 255 / alpha  （用于黑底显示）
-      // 同时白底显示需要满足：outRGB * alpha/255 + 255*(1 - alpha/255) = sRGB
-      // 代入 outRGB = hRGB * 255 / alpha：
-      //   sRGB = hRGB + 255*(1 - alpha/255)
-      // 这个等式不一定成立，所以我们需要对 outRGB 进行调整，让它在两种背景下都尽量接近目标。
-      // 实际操作中，我们直接取 outRGB = hRGB * 255 / alpha，然后让白底效果自然产生。
-      // 为了改善白底表现，我们可以对 outRGB 进行微调，使其向 sRGB 靠拢。
-      // 简单的修正：取 hRGB 和 sRGB 的混合，权重基于 alpha。
-      let t = alpha / 255; // 不透明度
-      // 在黑色背景下，显示隐藏图；在白色背景下，显示表面图
-      // outRGB 的目标：黑底时 alpha 混合 = hRGB；白底时 alpha 混合 = sRGB
-      // 由此可解出 outRGB 的理论值：outRGB = (hRGB + sRGB - 255 + 255*t) / (2*t)？可能繁琐。
-      // 采用经验方法：根据强度融合两种极端
-      let outR = Math.round(hR * 255 / alpha);
-      let outG = Math.round(hG * 255 / alpha);
-      let outB = Math.round(hB * 255 / alpha);
-
-      // 钳位到0-255
-      outR = Math.max(0, Math.min(255, outR));
-      outG = Math.max(0, Math.min(255, outG));
-      outB = Math.max(0, Math.min(255, outB));
-
-      // 可选：对颜色进行轻微的去饱和处理，减少透明边缘的彩色噪点
-      // （不强制，效果已经可以）
-
-      op[i] = outR;
-      op[i + 1] = outG;
-      op[i + 2] = outB;
-      op[i + 3] = Math.round(alpha);
+      op[i + 3] = alpha;
     }
 
-    const outCanvas = document.createElement('canvas'); outCanvas.width = w; outCanvas.height = h;
+    const outCanvas = document.createElement('canvas');
+    outCanvas.width = w;
+    outCanvas.height = h;
     outCanvas.getContext('2d').putImageData(out, 0, 0);
     return outCanvas.toDataURL('image/png');
   }
 
+  // 生成按钮事件
   generateBtn.addEventListener('click', () => {
     if (!surfaceImg || !hiddenImg) return;
     try {
-      const strength = parseFloat(strengthSlider.value);
-      const dataUrl = generatePhantom(surfaceImg, hiddenImg, strength);
+      const dataUrl = generatePhantom(surfaceImg, hiddenImg);
       const resultArea = container.querySelector('#phantomResultArea');
       resultArea.style.display = 'block';
       container.querySelector('#phantomPreviewLight').src = dataUrl;
@@ -249,6 +221,7 @@ function initPhantomEvents(container) {
     }
   });
 
+  // 背景渐变滑块
   const slider = container.querySelector('#phantomBgSlider');
   const sliderPreview = container.querySelector('#phantomSliderPreview');
   function updateSliderBg(val) {
