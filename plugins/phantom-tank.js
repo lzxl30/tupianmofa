@@ -136,24 +136,27 @@ function initPhantomEvents(container) {
   const generateBtn = container.querySelector('#phantomGenerateBtn');
   function updateBtn() { generateBtn.disabled = !(surfaceImg && hiddenImg); }
 
-  // ========== 预处理函数：压暗表面图、提亮隐藏图 ==========
-  function darkenImageData(imageData, factor = 0.8) {
+  // ========== 自适应亮度平衡 ==========
+  function getAverageBrightness(imageData) {
     const data = imageData.data;
+    let total = 0, count = 0;
     for (let i = 0; i < data.length; i += 4) {
-      data[i] = Math.round(data[i] * factor);         // R
-      data[i + 1] = Math.round(data[i + 1] * factor); // G
-      data[i + 2] = Math.round(data[i + 2] * factor); // B
-      // Alpha 保持 255
+      const r = data[i], g = data[i+1], b = data[i+2];
+      total += 0.299 * r + 0.587 * g + 0.114 * b;
+      count++;
     }
-    return imageData;
+    return total / count;
   }
 
-  function brightenImageData(imageData, factor = 1.2) {
+  function adjustBrightness(imageData, targetBrightness) {
+    const current = getAverageBrightness(imageData);
+    if (Math.abs(current - targetBrightness) < 2) return imageData; // 无需调整
+    const factor = targetBrightness / current;
     const data = imageData.data;
     for (let i = 0; i < data.length; i += 4) {
       data[i] = Math.min(255, Math.round(data[i] * factor));
-      data[i + 1] = Math.min(255, Math.round(data[i + 1] * factor));
-      data[i + 2] = Math.min(255, Math.round(data[i + 2] * factor));
+      data[i+1] = Math.min(255, Math.round(data[i+1] * factor));
+      data[i+2] = Math.min(255, Math.round(data[i+2] * factor));
     }
     return imageData;
   }
@@ -172,9 +175,22 @@ function initPhantomEvents(container) {
     const hCtx = hidCanvas.getContext('2d'); hCtx.drawImage(hid, 0, 0, w, h);
     let hData = hCtx.getImageData(0, 0, w, h);
 
-    // ★ 预处理：压暗表面图，提亮隐藏图，增大亮度差
-    sData = darkenImageData(sData, 0.75);   // 表面图压暗到 75%
-    hData = brightenImageData(hData, 1.25); // 隐藏图提亮 25%
+    // ★ 自适应处理：确保隐藏图平均亮度比表面图高约 40（经验值）
+    const avgS = getAverageBrightness(sData);
+    const avgH = getAverageBrightness(hData);
+    const targetDiff = 40; // 希望隐藏图比表面图亮 40
+
+    if (avgH - avgS < targetDiff) {
+      // 需要调整：提高隐藏图亮度，降低表面图亮度
+      const neededH = avgS + targetDiff;
+      const newTargetH = Math.min(255, neededH + 10); // 稍微过冲一点
+      const newTargetS = Math.max(0, avgS - 10);
+      adjustBrightness(sData, newTargetS);
+      adjustBrightness(hData, newTargetH);
+    } else {
+      // 已经满足亮度差，轻微微调避免极端
+      // 可选：不做处理
+    }
 
     const sp = sData.data, hp = hData.data;
     const out = new ImageData(w, h);
