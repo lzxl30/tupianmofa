@@ -1,4 +1,4 @@
-// ==================== 光棱坦克（通道隐藏）插件 ====================
+// ==================== 光棱坦克（亮度隐藏）插件 ====================
 registerPlugin({
   id: 'prism-tank',
   name: '光棱坦克',
@@ -8,7 +8,7 @@ registerPlugin({
     container.innerHTML = `
       <h2>🌈 光棱坦克</h2>
       <p style="color:var(--text2);margin-bottom:20px;">
-        将<strong>隐藏图</strong>编码到<strong>表面图</strong>的红色通道。肉眼难以察觉，提取红色通道或戴红蓝眼镜（左红右蓝）可见隐藏图。
+        将<strong>隐藏图</strong>编码到<strong>表面图</strong>的亮度中。正常看是表面图，调整亮度后隐藏图浮现。
       </p>
       <div class="upload-grid" style="display:grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap:16px; margin-bottom:20px;">
         <div class="upload-zone" id="prismSurfaceZone">
@@ -26,23 +26,21 @@ registerPlugin({
       </div>
       <div class="btn-row">
         <button class="btn btn-primary" id="prismGenerateBtn" disabled>🌈 生成光棱坦克</button>
-        <button class="btn btn-outline" id="prismExtractRedBtn">🔴 提取红色通道</button>
       </div>
       <div class="result-area" id="prismResultArea" style="display:none;">
         <p style="color:var(--accent2); font-weight:bold;">✅ 光棱坦克生成成功！</p>
-        <div style="display:flex; flex-wrap:wrap; gap:16px; justify-content:center;">
-          <div>
-            <p style="font-size:0.85rem; color:var(--text2);">正常观看</p>
-            <img id="prismResultImg" style="max-width:260px; border-radius:8px;">
-          </div>
-          <div>
-            <p style="font-size:0.85rem; color:var(--text2);">红色通道（隐藏图）</p>
-            <img id="prismRedImg" style="max-width:260px; border-radius:8px;">
-          </div>
+        <div style="margin:12px 0;">
+          <img id="prismResultImg" style="max-width:100%; max-height:50vh; border-radius:12px; box-shadow:0 4px 16px rgba(0,0,0,0.4);">
         </div>
+        <div style="margin:12px 0; display:flex; align-items:center; gap:10px; justify-content:center; flex-wrap:wrap;">
+          <span style="font-size:0.85rem; color:var(--text2);">🔅 模拟亮度调节：</span>
+          <input type="range" id="prismBrightnessSlider" min="-100" max="100" value="0" style="width:200px;">
+          <span id="prismBrightnessLabel" style="font-size:0.85rem; color:var(--accent2); min-width:45px;">0%</span>
+        </div>
+        <p style="font-size:0.75rem; color:var(--text2);">拖动滑块预览隐藏效果。下载的是原始图片，可用其他工具调整亮度查看。</p>
       </div>
       <div class="tip-bar">
-        💡 <strong>玩法说明：</strong>下载图片后戴上<strong>红蓝眼镜</strong>（左眼红、右眼蓝），或使用修图软件提取红色通道即可看到隐藏图。保持 PNG 格式。
+        💡 <strong>玩法说明：</strong>下载图片后，使用手机相册编辑功能或修图软件调整<strong>亮度/对比度</strong>，即可看到隐藏图浮现。也可左右拖动上方滑块预览效果。
       </div>
     `;
 
@@ -52,6 +50,7 @@ registerPlugin({
 });
 
 function initPrismTankEvents(container) {
+  // 辅助：加载图片
   function loadImageFromFile(file) {
     return new Promise((resolve, reject) => {
       const reader = new FileReader();
@@ -66,6 +65,7 @@ function initPrismTankEvents(container) {
     });
   }
 
+  // 上传区域通用逻辑
   function setupUpload(zoneId, inputId, onChange) {
     const zone = container.querySelector(`#${zoneId}`);
     const input = container.querySelector(`#${inputId}`);
@@ -124,85 +124,127 @@ function initPrismTankEvents(container) {
   const generateBtn = container.querySelector('#prismGenerateBtn');
   function updateBtn() { generateBtn.disabled = !(surfaceImg && hiddenImg); }
 
-  function generatePrismTank(surface, hidden) {
+  // RGB 转 HSL（h:0-360, s:0-1, l:0-1）
+  function rgbToHsl(r, g, b) {
+    r /= 255; g /= 255; b /= 255;
+    const max = Math.max(r, g, b), min = Math.min(r, g, b);
+    let h, s, l = (max + min) / 2;
+    if (max === min) { h = s = 0; }
+    else {
+      const d = max - min;
+      s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+      switch (max) {
+        case r: h = ((g - b) / d + (g < b ? 6 : 0)) / 6; break;
+        case g: h = ((b - r) / d + 2) / 6; break;
+        case b: h = ((r - g) / d + 4) / 6; break;
+      }
+    }
+    return [h * 360, s, l];
+  }
+
+  // HSL 转 RGB
+  function hslToRgb(h, s, l) {
+    h /= 360;
+    let r, g, b;
+    if (s === 0) { r = g = b = l; }
+    else {
+      const hue2rgb = (p, q, t) => {
+        if (t < 0) t += 1;
+        if (t > 1) t -= 1;
+        if (t < 1/6) return p + (q - p) * 6 * t;
+        if (t < 1/2) return q;
+        if (t < 2/3) return p + (q - p) * (2/3 - t) * 6;
+        return p;
+      };
+      const q = l < 0.5 ? l * (1 + s) : l + s - l * s;
+      const p = 2 * l - q;
+      r = hue2rgb(p, q, h + 1/3);
+      g = hue2rgb(p, q, h);
+      b = hue2rgb(p, q, h - 1/3);
+    }
+    return [Math.round(r * 255), Math.round(g * 255), Math.round(b * 255)];
+  }
+
+  // 生成光棱坦克合成图
+  function generatePrismTank(surface, hidden, strength = 0.08) {
     const w = surface.width;
     const h = surface.height;
 
-    // 绘制表面图
-    const surfaceCanvas = document.createElement('canvas');
-    surfaceCanvas.width = w; surfaceCanvas.height = h;
-    const sCtx = surfaceCanvas.getContext('2d');
+    // 将两张图绘制到相同尺寸
+    const surfCanvas = document.createElement('canvas');
+    surfCanvas.width = w; surfCanvas.height = h;
+    const sCtx = surfCanvas.getContext('2d');
     sCtx.drawImage(surface, 0, 0, w, h);
-    const surfaceData = sCtx.getImageData(0, 0, w, h);
+    const surfData = sCtx.getImageData(0, 0, w, h);
 
-    // 绘制隐藏图并缩放至相同尺寸
-    const hiddenCanvas = document.createElement('canvas');
-    hiddenCanvas.width = w; hiddenCanvas.height = h;
-    const hCtx = hiddenCanvas.getContext('2d');
+    const hidCanvas = document.createElement('canvas');
+    hidCanvas.width = w; hidCanvas.height = h;
+    const hCtx = hidCanvas.getContext('2d');
     hCtx.drawImage(hidden, 0, 0, w, h);
-    const hiddenData = hCtx.getImageData(0, 0, w, h);
+    const hidData = hCtx.getImageData(0, 0, w, h);
 
-    const outputData = new ImageData(w, h);
-    const sPix = surfaceData.data;
-    const hPix = hiddenData.data;
-    const oPix = outputData.data;
+    const outData = new ImageData(w, h);
+    const sPix = surfData.data;
+    const hPix = hidData.data;
+    const oPix = outData.data;
 
-    for (let i = 0; i < oPix.length; i += 4) {
-      // 红色通道：用隐藏图的亮度
-      const gray = Math.round(0.299 * hPix[i] + 0.587 * hPix[i+1] + 0.114 * hPix[i+2]);
-      oPix[i] = gray;           // R 来自隐藏图灰度
-      oPix[i+1] = sPix[i+1];   // G 保留表面图
-      oPix[i+2] = sPix[i+2];   // B 保留表面图
-      oPix[i+3] = 255;         // Alpha 不透明
+    for (let i = 0; i < sPix.length; i += 4) {
+      // 表面图像素的 HSL
+      const [hSl, sSl, lSl] = rgbToHsl(sPix[i], sPix[i+1], sPix[i+2]);
+
+      // 隐藏图像素灰度
+      const gray = 0.299 * hPix[i] + 0.587 * hPix[i+1] + 0.114 * hPix[i+2];
+      // 将灰度映射到 -0.5 到 0.5 的调整量
+      const adjust = (gray / 255 - 0.5) * strength * 2; // strength 控制强度
+      // 修改亮度，限制在 0-1 之间
+      let newL = lSl + adjust;
+      newL = Math.max(0, Math.min(1, newL));
+
+      // 转回 RGB
+      const [r, g, b] = hslToRgb(hSl, sSl, newL);
+      oPix[i] = r;
+      oPix[i+1] = g;
+      oPix[i+2] = b;
+      oPix[i+3] = 255;
     }
 
     const outCanvas = document.createElement('canvas');
     outCanvas.width = w; outCanvas.height = h;
-    outCanvas.getContext('2d').putImageData(outputData, 0, 0);
+    outCanvas.getContext('2d').putImageData(outData, 0, 0);
     return outCanvas.toDataURL('image/png');
   }
 
-  function extractRedChannel(imageDataUrl) {
-    const img = new Image();
-    return new Promise((resolve, reject) => {
-      img.onload = () => {
-        const canvas = document.createElement('canvas');
-        canvas.width = img.width; canvas.height = img.height;
-        const ctx = canvas.getContext('2d');
-        ctx.drawImage(img, 0, 0);
-        const data = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
-        const redData = new ImageData(canvas.width, canvas.height);
-        const rPix = redData.data;
-        for (let i = 0; i < rPix.length; i += 4) {
-          const r = data[i];
-          rPix[i] = r;
-          rPix[i+1] = r;
-          rPix[i+2] = r;
-          rPix[i+3] = 255;
-        }
-        ctx.putImageData(redData, 0, 0);
-        resolve(canvas.toDataURL('image/png'));
-      };
-      img.onerror = reject;
-      img.src = imageDataUrl;
-    });
-  }
-
+  // 存储生成结果
   let generatedDataUrl = null;
+  // 存储表面图亮度调整用的原始像素数据（用于快速滑块渲染）
+  let originalPixels = null;
+  let imageWidth = 0, imageHeight = 0;
 
   generateBtn.addEventListener('click', () => {
     if (!surfaceImg || !hiddenImg) return;
     try {
-      generatedDataUrl = generatePrismTank(surfaceImg, hiddenImg);
+      generatedDataUrl = generatePrismTank(surfaceImg, hiddenImg, 0.1);
       const resultArea = container.querySelector('#prismResultArea');
+      const resultImg = container.querySelector('#prismResultImg');
+      resultImg.src = generatedDataUrl;
       resultArea.style.display = 'block';
       resultArea.classList.add('show');
-      container.querySelector('#prismResultImg').src = generatedDataUrl;
 
-      // 显示红色通道预览
-      extractRedChannel(generatedDataUrl).then(url => {
-        container.querySelector('#prismRedImg').src = url;
-      });
+      // 为了快速调整亮度预览，保存图像数据
+      const tmpCanvas = document.createElement('canvas');
+      const tmpCtx = tmpCanvas.getContext('2d');
+      const img = new Image();
+      img.onload = () => {
+        tmpCanvas.width = img.width;
+        tmpCanvas.height = img.height;
+        tmpCtx.drawImage(img, 0, 0);
+        imageWidth = img.width;
+        imageHeight = img.height;
+        originalPixels = tmpCtx.getImageData(0, 0, imageWidth, imageHeight);
+        // 触发一次滑块初始渲染
+        updateBrightnessPreview(0);
+      };
+      img.src = generatedDataUrl;
 
       resultArea.scrollIntoView({ behavior: 'smooth', block: 'center' });
       showToast('🌈 光棱坦克生成成功！');
@@ -211,17 +253,44 @@ function initPrismTankEvents(container) {
     }
   });
 
-  // 提取红色通道按钮（方便查看）
-  container.querySelector('#prismExtractRedBtn').addEventListener('click', async () => {
-    if (!generatedDataUrl) {
-      showToast('请先生成光棱坦克');
-      return;
+  // 亮度滑块逻辑
+  const brightnessSlider = container.querySelector('#prismBrightnessSlider');
+  const brightnessLabel = container.querySelector('#prismBrightnessLabel');
+  const previewImg = container.querySelector('#prismResultImg');
+
+  function updateBrightnessPreview(value) {
+    if (!originalPixels) return;
+    const canvas = document.createElement('canvas');
+    canvas.width = imageWidth;
+    canvas.height = imageHeight;
+    const ctx = canvas.getContext('2d');
+    const outData = new ImageData(imageWidth, imageHeight);
+    const srcData = originalPixels.data;
+    const dstData = outData.data;
+    const adjust = value / 100; // -1 到 1
+
+    for (let i = 0; i < srcData.length; i += 4) {
+      if (adjust >= 0) {
+        // 提高亮度：线性插值到255
+        dstData[i] = Math.min(255, Math.round(srcData[i] + (255 - srcData[i]) * adjust));
+        dstData[i+1] = Math.min(255, Math.round(srcData[i+1] + (255 - srcData[i+1]) * adjust));
+        dstData[i+2] = Math.min(255, Math.round(srcData[i+2] + (255 - srcData[i+2]) * adjust));
+      } else {
+        // 降低亮度：线性插值到0
+        const factor = 1 + adjust; // 0 到 1
+        dstData[i] = Math.max(0, Math.round(srcData[i] * factor));
+        dstData[i+1] = Math.max(0, Math.round(srcData[i+1] * factor));
+        dstData[i+2] = Math.max(0, Math.round(srcData[i+2] * factor));
+      }
+      dstData[i+3] = 255;
     }
-    const url = await extractRedChannel(generatedDataUrl);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = 'red_channel.png';
-    a.click();
-    showToast('🔴 红色通道已下载');
+    ctx.putImageData(outData, 0, 0);
+    previewImg.src = canvas.toDataURL();
+  }
+
+  brightnessSlider.addEventListener('input', () => {
+    const val = parseInt(brightnessSlider.value, 10);
+    brightnessLabel.textContent = val + '%';
+    updateBrightnessPreview(val);
   });
 }
