@@ -27,19 +27,15 @@ registerPlugin({
         <button class="btn btn-primary" id="stegoEmbedBtn" disabled>🔐 隐藏图片</button>
         <button class="btn btn-accent" id="stegoExtractBtn">🔍 提取隐藏图片</button>
       </div>
-      <div class="result-area" id="stegoEmbedResult">
+      <div class="result-area" id="stegoEmbedResult" style="display:none;">
         <p style="color:var(--accent2); font-weight:bold;">✅ 隐藏成功！含密图片（表面看与原始载体无异）</p>
         <img id="stegoEmbedPreview" style="max-width:250px; border-radius:8px;">
-        <div class="btn-row">
-          <a class="btn btn-accent" id="stegoDownloadBtn" download="hidden_image.png">⬇️ 下载含密图片</a>
-        </div>
+        <!-- 不再需要下载按钮，框架会自动注入 -->
       </div>
-      <div class="result-area" id="stegoExtractResult">
+      <div class="result-area" id="stegoExtractResult" style="display:none;">
         <p style="color:var(--accent2); font-weight:bold;">🔓 提取成功！隐藏的图片：</p>
         <img id="stegoExtractPreview" style="max-width:250px; border-radius:8px;">
-        <div class="btn-row">
-          <a class="btn btn-accent" id="stegoExtractDownloadBtn" download="extracted_secret.png">⬇️ 下载提取的图片</a>
-        </div>
+        <!-- 不再需要下载按钮，框架会自动注入 -->
       </div>
       <div class="tip-bar">
         ⚠️ <strong>重要提醒：</strong>含密图片必须保持<strong>PNG格式</strong>，传输时请勾选<strong>「原图」</strong>。JPEG压缩或有损处理会破坏隐藏数据！
@@ -127,7 +123,6 @@ function initStegoEvents(container) {
   const embedBtn = container.querySelector('#stegoEmbedBtn');
   function updateBtn() { embedBtn.disabled = !(carrierImg && secretImg); }
 
-  // LSB 嵌入
   function embedLSB(cover, secret) {
     const cw = cover.width, ch = cover.height;
     const canvas = document.createElement('canvas'); canvas.width = cw; canvas.height = ch;
@@ -181,7 +176,6 @@ function initStegoEvents(container) {
     return outCanvas.toDataURL('image/png');
   }
 
-  // LSB 提取
   function extractLSB(imageData, w, h) {
     const pixels = imageData.data;
     const bits = [];
@@ -221,10 +215,11 @@ function initStegoEvents(container) {
       const url = embedLSB(carrierImg, secretImg);
       const embedRes = container.querySelector('#stegoEmbedResult');
       const extractRes = container.querySelector('#stegoExtractResult');
+      embedRes.style.display = 'block';
       embedRes.classList.add('show');
+      extractRes.style.display = 'none';
       extractRes.classList.remove('show');
       container.querySelector('#stegoEmbedPreview').src = url;
-      container.querySelector('#stegoDownloadBtn').href = url;
       embedRes.scrollIntoView({ behavior: 'smooth', block: 'center' });
       showToast('🔐 隐藏成功！请下载PNG并原图传输');
     } catch (e) { showToast('❌ ' + e.message); }
@@ -247,10 +242,11 @@ function initStegoEvents(container) {
         const secretUrl = extractLSB(imageData, img.width, img.height);
         const extractRes = container.querySelector('#stegoExtractResult');
         const embedRes = container.querySelector('#stegoEmbedResult');
+        extractRes.style.display = 'block';
         extractRes.classList.add('show');
+        embedRes.style.display = 'none';
         embedRes.classList.remove('show');
         container.querySelector('#stegoExtractPreview').src = secretUrl;
-        container.querySelector('#stegoExtractDownloadBtn').href = secretUrl;
         extractRes.scrollIntoView({ behavior: 'smooth', block: 'center' });
         showToast('🔓 提取成功！');
       } catch (e) { showToast('❌ ' + e.message); }
