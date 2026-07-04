@@ -1,4 +1,4 @@
-// ==================== 光棱坦克插件 ====================
+// ==================== 光棱坦克（通道隐藏）插件 ====================
 registerPlugin({
   id: 'prism-tank',
   name: '光棱坦克',
@@ -8,57 +8,50 @@ registerPlugin({
     container.innerHTML = `
       <h2>🌈 光棱坦克</h2>
       <p style="color:var(--text2);margin-bottom:20px;">
-        分离图片的<strong>红、绿、蓝</strong>三通道并偏移，模拟棱镜色散效果。可调方向和偏移量。
+        将<strong>隐藏图</strong>编码到<strong>表面图</strong>的红色通道。肉眼难以察觉，提取红色通道或戴红蓝眼镜（左红右蓝）可见隐藏图。
       </p>
-      <div class="upload-grid" style="display:grid; grid-template-columns: 1fr; gap:16px; margin-bottom:20px;">
-        <div class="upload-zone" id="prismUploadZone">
-          <span class="placeholder-icon">🖼️</span>
-          <span class="label-text">点击上传图片</span>
-          <input type="file" accept="image/*" id="prismFileInput" style="display:none;">
+      <div class="upload-grid" style="display:grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap:16px; margin-bottom:20px;">
+        <div class="upload-zone" id="prismSurfaceZone">
+          <span class="placeholder-icon">🏞️</span>
+          <span class="label-text">点击上传<strong>表面图</strong></span>
+          <input type="file" accept="image/*" id="prismSurfaceInput" style="display:none;">
+          <button class="clear-btn">✕</button>
+        </div>
+        <div class="upload-zone" id="prismHiddenZone">
+          <span class="placeholder-icon">👁️</span>
+          <span class="label-text">点击上传<strong>隐藏图</strong></span>
+          <input type="file" accept="image/*" id="prismHiddenInput" style="display:none;">
           <button class="clear-btn">✕</button>
         </div>
       </div>
-      <div style="display:flex; flex-wrap:wrap; gap:12px; justify-content:center; align-items:center; margin-bottom:16px;">
-        <div style="display:flex; align-items:center; gap:8px;">
-          <span style="font-size:0.85rem; color:var(--text2);">偏移量</span>
-          <input type="range" id="prismOffsetSlider" min="0" max="50" value="10" style="width:120px;">
-          <span id="prismOffsetValue" style="font-size:0.85rem; color:var(--accent2); min-width:30px;">10</span>
-        </div>
-        <div style="display:flex; gap:4px;">
-          <button class="btn btn-outline btn-sm active" id="prismDirH" style="padding:6px 16px; font-size:0.8rem;">水平</button>
-          <button class="btn btn-outline btn-sm" id="prismDirV" style="padding:6px 16px; font-size:0.8rem;">垂直</button>
-        </div>
-        <button class="btn btn-primary" id="prismGenerateBtn">🌈 生成光棱</button>
+      <div class="btn-row">
+        <button class="btn btn-primary" id="prismGenerateBtn" disabled>🌈 生成光棱坦克</button>
+        <button class="btn btn-outline" id="prismExtractRedBtn">🔴 提取红色通道</button>
       </div>
       <div class="result-area" id="prismResultArea" style="display:none;">
         <p style="color:var(--accent2); font-weight:bold;">✅ 光棱坦克生成成功！</p>
-        <img id="prismResultImg" style="max-width:100%; max-height:60vh; border-radius:12px; box-shadow:0 4px 16px rgba(0,0,0,0.4);">
+        <div style="display:flex; flex-wrap:wrap; gap:16px; justify-content:center;">
+          <div>
+            <p style="font-size:0.85rem; color:var(--text2);">正常观看</p>
+            <img id="prismResultImg" style="max-width:260px; border-radius:8px;">
+          </div>
+          <div>
+            <p style="font-size:0.85rem; color:var(--text2);">红色通道（隐藏图）</p>
+            <img id="prismRedImg" style="max-width:260px; border-radius:8px;">
+          </div>
+        </div>
       </div>
       <div class="tip-bar">
-        💡 <strong>玩法说明：</strong>红、绿、蓝通道分别向相反方向偏移，偏移量越大色散越明显。切换水平/垂直改变分离方向。
+        💡 <strong>玩法说明：</strong>下载图片后戴上<strong>红蓝眼镜</strong>（左眼红、右眼蓝），或使用修图软件提取红色通道即可看到隐藏图。保持 PNG 格式。
       </div>
     `;
 
-    initPrismEvents(container);
+    initPrismTankEvents(container);
   },
   destroy() {}
 });
 
-function initPrismEvents(container) {
-  const fileInput = container.querySelector('#prismFileInput');
-  const uploadZone = container.querySelector('#prismUploadZone');
-  const clearBtn = uploadZone.querySelector('.clear-btn');
-  const offsetSlider = container.querySelector('#prismOffsetSlider');
-  const offsetValue = container.querySelector('#prismOffsetValue');
-  const dirHBtn = container.querySelector('#prismDirH');
-  const dirVBtn = container.querySelector('#prismDirV');
-  const generateBtn = container.querySelector('#prismGenerateBtn');
-  const resultArea = container.querySelector('#prismResultArea');
-  const resultImg = container.querySelector('#prismResultImg');
-
-  let originalImage = null;
-
-  // 上传逻辑
+function initPrismTankEvents(container) {
   function loadImageFromFile(file) {
     return new Promise((resolve, reject) => {
       const reader = new FileReader();
@@ -73,144 +66,162 @@ function initPrismEvents(container) {
     });
   }
 
-  uploadZone.addEventListener('click', (e) => {
-    if (e.target === clearBtn) return;
-    fileInput.click();
-  });
-  uploadZone.addEventListener('dragover', (e) => { e.preventDefault(); uploadZone.style.borderColor = 'var(--accent)'; });
-  uploadZone.addEventListener('dragleave', () => { uploadZone.style.borderColor = ''; });
-  uploadZone.addEventListener('drop', (e) => {
-    e.preventDefault();
-    uploadZone.style.borderColor = '';
-    const file = e.dataTransfer.files[0];
-    if (file && file.type.startsWith('image/')) {
-      fileInput.files = e.dataTransfer.files;
-      fileInput.dispatchEvent(new Event('change'));
+  function setupUpload(zoneId, inputId, onChange) {
+    const zone = container.querySelector(`#${zoneId}`);
+    const input = container.querySelector(`#${inputId}`);
+    const clearBtn = zone.querySelector('.clear-btn');
+    let currentImg = null;
+
+    zone.addEventListener('click', (e) => { if (e.target === clearBtn) return; input.click(); });
+    zone.addEventListener('dragover', (e) => { e.preventDefault(); zone.style.borderColor = 'var(--accent)'; });
+    zone.addEventListener('dragleave', () => { zone.style.borderColor = ''; });
+    zone.addEventListener('drop', (e) => {
+      e.preventDefault();
+      zone.style.borderColor = '';
+      const file = e.dataTransfer.files[0];
+      if (file && file.type.startsWith('image/')) {
+        input.files = e.dataTransfer.files;
+        input.dispatchEvent(new Event('change'));
+      }
+    });
+    input.addEventListener('change', async (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      try {
+        const img = await loadImageFromFile(file);
+        currentImg = img;
+        const oldImg = zone.querySelector('img');
+        if (oldImg) oldImg.remove();
+        const preview = document.createElement('img');
+        preview.src = img.src;
+        zone.insertBefore(preview, clearBtn);
+        zone.classList.add('has-image');
+        zone.querySelector('.placeholder-icon').style.display = 'none';
+        zone.querySelector('.label-text').style.display = 'none';
+        clearBtn.style.display = 'block';
+        if (onChange) onChange(img);
+      } catch (err) { showToast('❌ 图片加载失败'); }
+    });
+    clearBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      currentImg = null;
+      input.value = '';
+      const imgEl = zone.querySelector('img');
+      if (imgEl) imgEl.remove();
+      zone.classList.remove('has-image');
+      zone.querySelector('.placeholder-icon').style.display = '';
+      zone.querySelector('.label-text').style.display = '';
+      clearBtn.style.display = 'none';
+      if (onChange) onChange(null);
+    });
+    return { getImage: () => currentImg };
+  }
+
+  let surfaceImg = null, hiddenImg = null;
+  setupUpload('prismSurfaceZone', 'prismSurfaceInput', (img) => { surfaceImg = img; updateBtn(); });
+  setupUpload('prismHiddenZone', 'prismHiddenInput', (img) => { hiddenImg = img; updateBtn(); });
+
+  const generateBtn = container.querySelector('#prismGenerateBtn');
+  function updateBtn() { generateBtn.disabled = !(surfaceImg && hiddenImg); }
+
+  function generatePrismTank(surface, hidden) {
+    const w = surface.width;
+    const h = surface.height;
+
+    // 绘制表面图
+    const surfaceCanvas = document.createElement('canvas');
+    surfaceCanvas.width = w; surfaceCanvas.height = h;
+    const sCtx = surfaceCanvas.getContext('2d');
+    sCtx.drawImage(surface, 0, 0, w, h);
+    const surfaceData = sCtx.getImageData(0, 0, w, h);
+
+    // 绘制隐藏图并缩放至相同尺寸
+    const hiddenCanvas = document.createElement('canvas');
+    hiddenCanvas.width = w; hiddenCanvas.height = h;
+    const hCtx = hiddenCanvas.getContext('2d');
+    hCtx.drawImage(hidden, 0, 0, w, h);
+    const hiddenData = hCtx.getImageData(0, 0, w, h);
+
+    const outputData = new ImageData(w, h);
+    const sPix = surfaceData.data;
+    const hPix = hiddenData.data;
+    const oPix = outputData.data;
+
+    for (let i = 0; i < oPix.length; i += 4) {
+      // 红色通道：用隐藏图的亮度
+      const gray = Math.round(0.299 * hPix[i] + 0.587 * hPix[i+1] + 0.114 * hPix[i+2]);
+      oPix[i] = gray;           // R 来自隐藏图灰度
+      oPix[i+1] = sPix[i+1];   // G 保留表面图
+      oPix[i+2] = sPix[i+2];   // B 保留表面图
+      oPix[i+3] = 255;         // Alpha 不透明
     }
-  });
-  fileInput.addEventListener('change', async (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-    try {
-      const img = await loadImageFromFile(file);
-      originalImage = img;
-      const oldImg = uploadZone.querySelector('img');
-      if (oldImg) oldImg.remove();
-      const preview = document.createElement('img');
-      preview.src = img.src;
-      uploadZone.insertBefore(preview, clearBtn);
-      uploadZone.classList.add('has-image');
-      uploadZone.querySelector('.placeholder-icon').style.display = 'none';
-      uploadZone.querySelector('.label-text').style.display = 'none';
-      clearBtn.style.display = 'block';
-      showToast('图片已加载');
-    } catch (err) {
-      showToast('❌ 图片加载失败');
-    }
-  });
-  clearBtn.addEventListener('click', (e) => {
-    e.stopPropagation();
-    originalImage = null;
-    fileInput.value = '';
-    const imgEl = uploadZone.querySelector('img');
-    if (imgEl) imgEl.remove();
-    uploadZone.classList.remove('has-image');
-    uploadZone.querySelector('.placeholder-icon').style.display = '';
-    uploadZone.querySelector('.label-text').style.display = '';
-    clearBtn.style.display = 'none';
-  });
 
-  // 偏移量显示
-  offsetSlider.addEventListener('input', () => {
-    offsetValue.textContent = offsetSlider.value;
-  });
+    const outCanvas = document.createElement('canvas');
+    outCanvas.width = w; outCanvas.height = h;
+    outCanvas.getContext('2d').putImageData(outputData, 0, 0);
+    return outCanvas.toDataURL('image/png');
+  }
 
-  // 方向切换
-  let direction = 'horizontal';
-  dirHBtn.classList.add('active');
-  dirHBtn.addEventListener('click', () => {
-    direction = 'horizontal';
-    dirHBtn.classList.add('active');
-    dirVBtn.classList.remove('active');
-  });
-  dirVBtn.addEventListener('click', () => {
-    direction = 'vertical';
-    dirVBtn.classList.add('active');
-    dirHBtn.classList.remove('active');
-  });
-
-  // 生成光棱效果
-  generateBtn.addEventListener('click', () => {
-    if (!originalImage) {
-      showToast('请先上传图片');
-      return;
-    }
-    try {
-      const offset = parseInt(offsetSlider.value, 10);
-      const canvas = document.createElement('canvas');
-      const ctx = canvas.getContext('2d');
-      canvas.width = originalImage.width;
-      canvas.height = originalImage.height;
-      ctx.drawImage(originalImage, 0, 0);
-      const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-      const srcData = imageData.data;
-      const outputData = new ImageData(canvas.width, canvas.height);
-      const dstData = outputData.data;
-
-      // 初始化目标为透明
-      dstData.fill(0);
-
-      const w = canvas.width;
-      const h = canvas.height;
-
-      for (let y = 0; y < h; y++) {
-        for (let x = 0; x < w; x++) {
-          const srcIdx = (y * w + x) * 4;
-          const r = srcData[srcIdx];
-          const g = srcData[srcIdx + 1];
-          const b = srcData[srcIdx + 2];
-          const a = srcData[srcIdx + 3];
-
-          // 计算各通道偏移后的坐标
-          let rx = x, ry = y;
-          let gx = x, gy = y;
-          let bx = x, by = y;
-
-          if (direction === 'horizontal') {
-            rx = x - offset;
-            bx = x + offset;
-          } else {
-            ry = y - offset;
-            by = y + offset;
-          }
-
-          // 绘制各通道到目标位置（带透明度混合）
-          drawChannel(dstData, w, h, rx, ry, r, 0, 0, a);
-          drawChannel(dstData, w, h, gx, gy, 0, g, 0, a);
-          drawChannel(dstData, w, h, bx, by, 0, 0, b, a);
+  function extractRedChannel(imageDataUrl) {
+    const img = new Image();
+    return new Promise((resolve, reject) => {
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        canvas.width = img.width; canvas.height = img.height;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0);
+        const data = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
+        const redData = new ImageData(canvas.width, canvas.height);
+        const rPix = redData.data;
+        for (let i = 0; i < rPix.length; i += 4) {
+          const r = data[i];
+          rPix[i] = r;
+          rPix[i+1] = r;
+          rPix[i+2] = r;
+          rPix[i+3] = 255;
         }
-      }
+        ctx.putImageData(redData, 0, 0);
+        resolve(canvas.toDataURL('image/png'));
+      };
+      img.onerror = reject;
+      img.src = imageDataUrl;
+    });
+  }
 
-      // 辅助函数：将某个通道值绘制到目标像素（累加混合）
-      function drawChannel(dst, width, height, px, py, cr, cg, cb, alpha) {
-        if (px < 0 || px >= width || py < 0 || py >= height) return;
-        const idx = (py * width + px) * 4;
-        // 简单叠加（后绘制的通道会覆盖前一个，但这里我们希望混合出白色，所以用加法然后钳位）
-        dst[idx] = Math.min(255, dst[idx] + cr);
-        dst[idx + 1] = Math.min(255, dst[idx + 1] + cg);
-        dst[idx + 2] = Math.min(255, dst[idx + 2] + cb);
-        dst[idx + 3] = 255; // 完全不透明
-      }
+  let generatedDataUrl = null;
 
-      ctx.putImageData(outputData, 0, 0);
-      const dataUrl = canvas.toDataURL('image/png');
-      resultImg.src = dataUrl;
+  generateBtn.addEventListener('click', () => {
+    if (!surfaceImg || !hiddenImg) return;
+    try {
+      generatedDataUrl = generatePrismTank(surfaceImg, hiddenImg);
+      const resultArea = container.querySelector('#prismResultArea');
       resultArea.style.display = 'block';
       resultArea.classList.add('show');
+      container.querySelector('#prismResultImg').src = generatedDataUrl;
+
+      // 显示红色通道预览
+      extractRedChannel(generatedDataUrl).then(url => {
+        container.querySelector('#prismRedImg').src = url;
+      });
+
       resultArea.scrollIntoView({ behavior: 'smooth', block: 'center' });
       showToast('🌈 光棱坦克生成成功！');
     } catch (err) {
       showToast('❌ 生成失败: ' + err.message);
     }
+  });
+
+  // 提取红色通道按钮（方便查看）
+  container.querySelector('#prismExtractRedBtn').addEventListener('click', async () => {
+    if (!generatedDataUrl) {
+      showToast('请先生成光棱坦克');
+      return;
+    }
+    const url = await extractRedChannel(generatedDataUrl);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'red_channel.png';
+    a.click();
+    showToast('🔴 红色通道已下载');
   });
 }
