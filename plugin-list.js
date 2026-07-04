@@ -22,7 +22,7 @@ const PLUGIN_LIST = [
   name: '图片混淆',
   icon: '🌀',
   script: 'plugins/image-scramble.js',
-  badge: ''
+  badge: '新'
 }// 示例：未来添加新玩法
   // {
   //   id: 'ascii-art',
