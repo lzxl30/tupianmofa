@@ -19,5 +19,12 @@ const PLUGIN_LIST = [
     icon: '🌀',
     script: 'plugins/image-scramble.js',
     badge: ''
+  },
+  {
+  id: 'prism-tank',
+  name: '光棱坦克',
+  icon: '🌈',
+  script: 'plugins/prism-tank.js',
+  badge: '新'
   }
 ];
