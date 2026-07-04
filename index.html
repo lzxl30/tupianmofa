@@ -1,268 +1,476 @@
-// ==================== 核心框架：插件加载 & 标星置顶 & 自动描述下载 & 全部玩法菜单 ====================
-const STORAGE_KEY = 'toolbox_starred_plugins';
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes, viewport-fit=cover">
+    <title>图片魔法工具箱</title>
+    <style>
+        :root {
+            --bg: #0a0a14;
+            --surface: rgba(22, 22, 40, 0.85);
+            --surface2: rgba(30, 30, 55, 0.7);
+            --accent: #8b74ff;
+            --accent2: #4ce0b2;
+            --accent3: #ff6b8a;
+            --text: #e8e8f0;
+            --text2: #a8a8c0;
+            --border: rgba(255, 255, 255, 0.08);
+            --border-active: rgba(255, 255, 255, 0.15);
+            --radius: 18px;
+            --radius-sm: 12px;
+            --shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+            --shadow-sm: 0 4px 12px rgba(0, 0, 0, 0.3);
+            --transition: 0.25s cubic-bezier(0.25, 0.8, 0.25, 1.1);
+        }
 
-function getStarredPlugins() {
-  try { const data = localStorage.getItem(STORAGE_KEY); return data ? JSON.parse(data) : []; }
-  catch { return []; }
-}
-function saveStarredPlugins(list) { localStorage.setItem(STORAGE_KEY, JSON.stringify(list)); }
-function toggleStar(pluginId) {
-  const starred = getStarredPlugins();
-  const index = starred.indexOf(pluginId);
-  if (index === -1) starred.push(pluginId);
-  else starred.splice(index, 1);
-  saveStarredPlugins(starred);
-  return starred;
-}
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', system-ui, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 10px;
+            background-image:
+                radial-gradient(ellipse at 20% 20%, rgba(139, 116, 255, 0.12) 0%, transparent 50%),
+                radial-gradient(ellipse at 80% 60%, rgba(76, 224, 178, 0.08) 0%, transparent 50%),
+                radial-gradient(ellipse at 50% 90%, rgba(255, 107, 138, 0.06) 0%, transparent 50%);
+            background-attachment: fixed;
+            -webkit-tap-highlight-color: transparent;
+            -webkit-font-smoothing: antialiased;
+        }
+        .app-container {
+            max-width: 960px;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
 
-const pluginRegistry = [];
-let currentPlugin = null;
+        /* 头部 */
+        .header {
+            text-align: center;
+            padding: 10px 0 4px;
+            flex-shrink: 0;
+        }
+        .header .icon-row {
+            font-size: 30px;
+            margin-bottom: 4px;
+            letter-spacing: 4px;
+            filter: drop-shadow(0 2px 6px rgba(139, 116, 255, 0.3));
+        }
+        .header h1 {
+            font-size: 1.6rem;
+            font-weight: 700;
+            background: linear-gradient(135deg, var(--accent), var(--accent2));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            margin-bottom: 2px;
+        }
+        .header .subtitle {
+            color: var(--text2);
+            font-size: 0.8rem;
+            opacity: 0.8;
+        }
 
-function registerPlugin(plugin) { pluginRegistry.push(plugin); }
+        /* 导航栏容器 */
+        .nav-wrapper {
+            position: relative;
+            flex-shrink: 0;
+        }
+        .nav-tabs {
+            display: flex;
+            gap: 6px;
+            background: rgba(22, 22, 40, 0.5);
+            backdrop-filter: blur(14px);
+            -webkit-backdrop-filter: blur(14px);
+            border-radius: var(--radius);
+            padding: 5px 50px 5px 5px;
+            border: 1px solid var(--border);
+            box-shadow: var(--shadow-sm);
+            overflow-x: auto;
+            -webkit-overflow-scrolling: touch;
+            scrollbar-width: thin;
+            scrollbar-color: var(--accent) transparent;
+            white-space: nowrap;
+        }
+        .nav-tabs::-webkit-scrollbar { height: 3px; }
+        .nav-tabs::-webkit-scrollbar-thumb { background: var(--accent); border-radius: 3px; }
+        .nav-tab {
+            flex: 0 0 auto;
+            padding: 8px 18px;
+            border-radius: 25px;
+            border: none;
+            cursor: pointer;
+            font-size: 0.9rem;
+            font-weight: 600;
+            background: transparent;
+            color: var(--text2);
+            transition: var(--transition);
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            white-space: nowrap;
+            user-select: none;
+        }
+        .nav-tab:hover { color: var(--text); background: rgba(255,255,255,0.05); }
+        .nav-tab.active {
+            background: var(--accent);
+            color: #fff;
+            box-shadow: 0 4px 12px rgba(139, 116, 255, 0.35);
+        }
+        .nav-tab .badge {
+            font-size: 0.6rem;
+            background: rgba(255,255,255,0.2);
+            padding: 2px 7px;
+            border-radius: 20px;
+        }
+        .nav-tab .star-btn {
+            font-size: 1rem;
+            cursor: pointer;
+            transition: transform 0.2s;
+            line-height: 1;
+        }
+        .nav-tab .star-btn:hover { transform: scale(1.25); }
+        .nav-tab.starred {
+            box-shadow: inset 0 0 0 2px rgba(255,215,0,0.5);
+            background: rgba(255,215,0,0.04);
+        }
 
-function showToast(msg, duration = 2500) {
-  const container = document.getElementById('toastContainer');
-  const toast = document.createElement('div');
-  toast.className = 'toast';
-  toast.textContent = msg;
-  container.appendChild(toast);
-  setTimeout(() => { if (toast.parentNode) toast.parentNode.removeChild(toast); }, duration + 400);
-}
+        /* 展开全部按钮 */
+        .nav-more-btn {
+            position: absolute;
+            right: 4px;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 42px;
+            height: 42px;
+            border-radius: 50%;
+            background: rgba(22, 22, 40, 0.8);
+            backdrop-filter: blur(10px);
+            border: 1px solid var(--border);
+            color: var(--text);
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: var(--transition);
+            z-index: 5;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+        }
+        .nav-more-btn:hover {
+            background: var(--accent);
+            border-color: var(--accent);
+            color: #fff;
+        }
 
-function sortPluginsByStar(plugins) {
-  const starred = getStarredPlugins();
-  const starredP = [], normalP = [];
-  plugins.forEach(p => {
-    if (starred.includes(p.id)) starredP.push(p);
-    else normalP.push(p);
-  });
-  return [...starredP, ...normalP];
-}
+        /* V 形箭头（两条线，无底边） */
+        .v-icon {
+            display: inline-block;
+            width: 10px;
+            height: 10px;
+            border: solid currentColor;
+            border-width: 0 2px 2px 0;
+            transform: rotate(45deg);
+            margin-top: -2px;
+        }
 
-function buildUI() {
-  const navContainer = document.getElementById('navTabs');
-  const panelsContainer = document.getElementById('panelsContainer');
-  navContainer.innerHTML = '';
-  panelsContainer.innerHTML = '';
+        /* 全部玩法下拉菜单 */
+        .plugin-dropdown {
+            position: absolute;
+            right: 0;
+            top: calc(100% + 8px);
+            background: rgba(20, 20, 35, 0.95);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-sm);
+            padding: 8px;
+            min-width: 220px;
+            max-height: 300px;
+            overflow-y: auto;
+            z-index: 100;
+            box-shadow: 0 12px 32px rgba(0,0,0,0.6);
+            display: none;
+        }
+        .plugin-dropdown.show { display: block; }
+        .plugin-dropdown::-webkit-scrollbar { width: 3px; }
+        .plugin-dropdown::-webkit-scrollbar-thumb { background: var(--accent); border-radius: 3px; }
+        .plugin-dropdown-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 10px 14px;
+            border-radius: 20px;
+            cursor: pointer;
+            color: var(--text);
+            font-size: 0.9rem;
+            transition: background 0.2s;
+            user-select: none;
+        }
+        .plugin-dropdown-item:hover { background: rgba(139,116,255,0.15); }
+        .plugin-dropdown-item .star-btn {
+            font-size: 1rem;
+            cursor: pointer;
+            margin-right: 4px;
+        }
+        .plugin-dropdown-item .badge {
+            font-size: 0.6rem;
+            background: rgba(139,116,255,0.3);
+            padding: 2px 7px;
+            border-radius: 20px;
+            margin-left: auto;
+        }
 
-  const sortedPlugins = sortPluginsByStar(pluginRegistry);
-  const starred = getStarredPlugins();
+        /* 面板容器 */
+        #panelsContainer {
+            flex: 1;
+            min-height: 0;
+            overflow: hidden;
+        }
+        .panel {
+            background: var(--surface);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border-radius: var(--radius);
+            padding: 18px 20px;
+            border: 1px solid var(--border);
+            box-shadow: var(--shadow);
+            height: 100%;
+            overflow-y: auto;
+            display: none;
+            animation: fadeSlideIn 0.35s ease;
+        }
+        .panel.active { display: flex; flex-direction: column; }
+        .panel::-webkit-scrollbar { width: 4px; }
+        .panel::-webkit-scrollbar-thumb { background: var(--accent); border-radius: 4px; }
 
-  sortedPlugins.forEach((plugin) => {
-    const isStarred = starred.includes(plugin.id);
-    const btn = document.createElement('button');
-    btn.className = 'nav-tab' + (isStarred ? ' starred' : '');
-    btn.dataset.pluginId = plugin.id;
-    btn.innerHTML = `
-      <span class="star-btn" data-star="${plugin.id}">${isStarred ? '⭐' : '☆'}</span>
-      ${plugin.icon} ${plugin.name}
-      ${plugin.badge ? `<span class="badge">${plugin.badge}</span>` : ''}
-    `;
-    btn.addEventListener('click', (e) => {
-      if (e.target.classList.contains('star-btn') || e.target.closest('.star-btn')) return;
-      switchToPlugin(plugin.id);
-      closeDropdown();
-    });
-    const starBtn = btn.querySelector('.star-btn');
-    starBtn.addEventListener('click', (e) => {
-      e.stopPropagation();
-      toggleStar(plugin.id);
-      buildUI();
-      if (currentPlugin && currentPlugin.id === plugin.id) switchToPlugin(plugin.id);
-      showToast(getStarredPlugins().includes(plugin.id) ? '⭐ 已置顶' : '已取消置顶');
-    });
-    navContainer.appendChild(btn);
+        @keyframes fadeSlideIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
 
-    const panel = document.createElement('div');
-    panel.className = 'panel';
-    panel.id = `panel-${plugin.id}`;
-    panelsContainer.appendChild(panel);
-  });
+        .panel > * { flex-shrink: 0; }
+        .panel .plugin-content { flex: 1; min-height: 0; overflow-y: auto; }
 
-  if (sortedPlugins.length > 0) switchToPlugin(sortedPlugins[0].id);
-  buildDropdown();
-}
+        .upload-zone {
+            background: var(--surface2);
+            border: 2px dashed var(--border);
+            border-radius: var(--radius-sm);
+            padding: 16px 12px;
+            text-align: center;
+            cursor: pointer;
+            transition: var(--transition);
+            position: relative;
+            min-height: 120px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            word-break: break-word;
+        }
+        .upload-zone:hover {
+            border-color: var(--accent);
+            background: rgba(139,116,255,0.04);
+            transform: translateY(-1px);
+        }
+        .upload-zone.has-image {
+            border-color: var(--accent2);
+            border-style: solid;
+            background: rgba(76,224,178,0.05);
+            padding: 10px;
+        }
+        .upload-zone img {
+            max-width: 100%;
+            max-height: 160px;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+            object-fit: contain;
+        }
+        .upload-zone .placeholder-icon { font-size: 32px; opacity: 0.5; }
+        .upload-zone .label-text { font-size: 0.8rem; color: var(--text2); font-weight: 500; }
+        .upload-zone .clear-btn {
+            position: absolute;
+            top: 6px;
+            right: 8px;
+            background: rgba(0,0,0,0.6);
+            backdrop-filter: blur(4px);
+            color: #fff;
+            border: none;
+            border-radius: 50%;
+            width: 26px;
+            height: 26px;
+            cursor: pointer;
+            font-size: 16px;
+            line-height: 26px;
+            text-align: center;
+            display: none;
+            z-index: 2;
+        }
+        .upload-zone.has-image .clear-btn { display: block; }
+        .upload-zone .clear-btn:hover { background: #e74c3c; }
 
-function switchToPlugin(pluginId) {
-  if (currentPlugin && currentPlugin.destroy) currentPlugin.destroy();
-  document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
-  document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
+        .btn-row {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            justify-content: center;
+            margin: 12px 0;
+        }
+        .btn {
+            padding: 8px 22px;
+            border-radius: 25px;
+            font-size: 0.9rem;
+            font-weight: 600;
+            border: none;
+            cursor: pointer;
+            transition: var(--transition);
+            color: #fff;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            text-decoration: none;
+            white-space: nowrap;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+            backdrop-filter: blur(4px);
+        }
+        .btn:active { transform: scale(0.96); }
+        .btn:disabled { opacity: 0.4; cursor: not-allowed; filter: grayscale(30%); transform: none; box-shadow: none; }
+        .btn-primary { background: linear-gradient(135deg, var(--accent), #6a5acd); }
+        .btn-accent { background: linear-gradient(135deg, var(--accent2), #38b297); color: #0f0f1a; }
+        .btn-outline { background: transparent; border: 2px solid var(--border-active); color: var(--text); }
 
-  const plugin = pluginRegistry.find(p => p.id === pluginId);
-  if (!plugin) return;
+        .result-area {
+            background: var(--surface2);
+            border-radius: var(--radius-sm);
+            padding: 16px;
+            margin-top: 12px;
+            text-align: center;
+            border: 1px solid var(--border);
+            display: none;
+            backdrop-filter: blur(6px);
+            animation: fadeSlideIn 0.35s ease;
+        }
+        .result-area.show { display: block; }
+        .result-area img {
+            max-width: 200px;
+            border-radius: 10px;
+            margin: 6px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+        }
 
-  const panel = document.getElementById(`panel-${pluginId}`);
-  panel.classList.add('active');
-  const tabBtn = document.querySelector(`.nav-tab[data-plugin-id="${pluginId}"]`);
-  if (tabBtn) tabBtn.classList.add('active');
+        .tip-bar {
+            background: rgba(139,116,255,0.06);
+            border-left: 3px solid var(--accent);
+            border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+            padding: 10px 14px;
+            margin-top: 10px;
+            font-size: 0.8rem;
+            color: var(--text2);
+            line-height: 1.5;
+            backdrop-filter: blur(4px);
+        }
 
-  panel.innerHTML = '';
-  plugin.render(panel);
-  currentPlugin = plugin;
+        .toast {
+            position: fixed;
+            top: 15px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(20,20,35,0.9);
+            backdrop-filter: blur(20px);
+            color: #fff;
+            padding: 10px 24px;
+            border-radius: 25px;
+            font-weight: 600;
+            z-index: 1000;
+            font-size: 0.9rem;
+            box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+            animation: toastIn 0.3s ease, toastOut 0.3s ease 2s forwards;
+            pointer-events: none;
+            max-width: 85vw;
+            text-align: center;
+            border: 1px solid rgba(255,255,255,0.1);
+        }
+        @keyframes toastIn { from { opacity: 0; transform: translateX(-50%) translateY(-20px); } to { opacity: 1; transform: translateX(-50%) translateY(0); } }
+        @keyframes toastOut { from { opacity: 1; } to { opacity: 0; transform: translateX(-50%) translateY(-20px); } }
 
-  observePanelForDownloadableImages(panel);
-}
+        .footer-links {
+            display: flex;
+            gap: 10px;
+            justify-content: center;
+            align-items: center;
+            flex-shrink: 0;
+            padding: 8px 0 4px;
+        }
+        .footer-link-btn {
+            padding: 8px 18px;
+            border-radius: 25px;
+            font-size: 0.8rem;
+            font-weight: 600;
+            background: rgba(255,255,255,0.06);
+            backdrop-filter: blur(10px);
+            border: 1px solid var(--border);
+            color: var(--text2);
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            transition: var(--transition);
+            white-space: nowrap;
+        }
+        .footer-link-btn:hover {
+            background: rgba(139,116,255,0.15);
+            border-color: var(--accent);
+            color: #fff;
+            transform: translateY(-1px);
+        }
 
-function loadPlugins() {
-  const loadPromises = PLUGIN_LIST.map(item => {
-    return new Promise((resolve, reject) => {
-      const script = document.createElement('script');
-      script.src = item.script;
-      script.onload = resolve;
-      script.onerror = () => reject(new Error(`加载失败: ${item.script}`));
-      document.head.appendChild(script);
-    });
-  });
-  Promise.all(loadPromises)
-    .then(() => buildUI())
-    .catch(err => { console.error(err); showToast('⚠️ 部分插件加载失败'); buildUI(); });
-}
+        @media (max-width: 640px) {
+            body { padding: 8px; }
+            .header h1 { font-size: 1.4rem; }
+            .header .icon-row { font-size: 26px; }
+            .nav-tab { padding: 6px 14px; font-size: 0.8rem; }
+            .panel { padding: 14px 12px; }
+            .upload-zone { min-height: 110px; padding: 12px 10px; }
+            .upload-zone .placeholder-icon { font-size: 28px; }
+            .btn { padding: 7px 18px; font-size: 0.85rem; }
+            .result-area img { max-width: 160px; }
+            .footer-link-btn { padding: 6px 14px; font-size: 0.75rem; }
+            .nav-more-btn { width: 36px; height: 36px; }
+            .plugin-dropdown { min-width: 180px; }
+        }
+    </style>
+</head>
+<body>
+<div class="app-container">
+    <div class="header">
+        <div class="icon-row">🖼️✨🔮</div>
+        <h1>图片魔法工具箱</h1>
+        <p class="subtitle">幻影坦克 · LSB隐写术 · 更多玩法扩展中</p>
+    </div>
+    <div class="nav-wrapper">
+        <nav class="nav-tabs" id="navTabs"></nav>
+        <!-- V 形箭头按钮 -->
+        <button class="nav-more-btn" id="navMoreBtn" title="查看全部玩法">
+            <span class="v-icon"></span>
+        </button>
+        <div class="plugin-dropdown" id="pluginDropdown"></div>
+    </div>
+    <div id="panelsContainer"></div>
 
-window.addEventListener('DOMContentLoaded', loadPlugins);
+    <div class="footer-links">
+        <a href="https://pd.qq.com/s/gdfnlttnh?b=9" target="_blank" class="footer-link-btn">🎮 次元ACG</a>
+        <a href="https://pd.qq.com/s/4xkjrfjz1?b=9" target="_blank" class="footer-link-btn">🌸 米游途</a>
+    </div>
+</div>
+<div id="toastContainer"></div>
 
-// ==================== 全部玩法下拉菜单 ====================
-function buildDropdown() {
-  const dropdown = document.getElementById('pluginDropdown');
-  if (!dropdown) return;
-  dropdown.innerHTML = '';
-  const starred = getStarredPlugins();
-  pluginRegistry.forEach(plugin => {
-    const isStarred = starred.includes(plugin.id);
-    const item = document.createElement('div');
-    item.className = 'plugin-dropdown-item';
-    item.innerHTML = `
-      <span class="star-btn" style="font-size:1rem;">${isStarred ? '⭐' : '☆'}</span>
-      ${plugin.icon} ${plugin.name}
-      ${plugin.badge ? `<span class="badge">${plugin.badge}</span>` : ''}
-    `;
-    item.addEventListener('click', (e) => {
-      if (e.target.classList.contains('star-btn')) return;
-      switchToPlugin(plugin.id);
-      closeDropdown();
-    });
-    const starBtn = item.querySelector('.star-btn');
-    starBtn.addEventListener('click', (e) => {
-      e.stopPropagation();
-      toggleStar(plugin.id);
-      buildUI();
-      if (currentPlugin && currentPlugin.id === plugin.id) switchToPlugin(plugin.id);
-      showToast(getStarredPlugins().includes(plugin.id) ? '⭐ 已置顶' : '已取消置顶');
-    });
-    dropdown.appendChild(item);
-  });
-}
-
-function closeDropdown() {
-  const dropdown = document.getElementById('pluginDropdown');
-  if (dropdown) dropdown.classList.remove('show');
-}
-
-document.addEventListener('click', (e) => {
-  const moreBtn = document.getElementById('navMoreBtn');
-  const dropdown = document.getElementById('pluginDropdown');
-  if (!moreBtn || !dropdown) return;
-  if (moreBtn.contains(e.target)) {
-    dropdown.classList.toggle('show');
-  } else if (!dropdown.contains(e.target)) {
-    dropdown.classList.remove('show');
-  }
-});
-
-// ==================== 统一描述下载 ====================
-if (!CanvasRenderingContext2D.prototype.roundRect) {
-  CanvasRenderingContext2D.prototype.roundRect = function (x, y, w, h, r) {
-    if (typeof r === 'number') r = { tl: r, tr: r, br: r, bl: r };
-    this.beginPath();
-    this.moveTo(x + r.tl, y);
-    this.lineTo(x + w - r.tr, y);
-    this.quadraticCurveTo(x + w, y, x + w, y + r.tr);
-    this.lineTo(x + w, y + h - r.br);
-    this.quadraticCurveTo(x + w, y + h, x + w - r.br, y + h);
-    this.lineTo(x + r.bl, y + h);
-    this.quadraticCurveTo(x, y + h, x, y + h - r.bl);
-    this.lineTo(x, y + r.tl);
-    this.quadraticCurveTo(x, y, x + r.tl, y);
-    this.closePath();
-  };
-}
-
-function addDescriptionToImage(imageDataUrl, description) {
-  return new Promise((resolve, reject) => {
-    if (!description || description.trim() === '') {
-      resolve(imageDataUrl);
-      return;
-    }
-    const img = new Image();
-    img.onload = () => {
-      const canvas = document.createElement('canvas');
-      const ctx = canvas.getContext('2d');
-      canvas.width = img.width;
-      canvas.height = img.height;
-      ctx.drawImage(img, 0, 0);
-      const fontSize = Math.max(12, Math.floor(img.width / 40));
-      ctx.font = `bold ${fontSize}px "PingFang SC", "Microsoft YaHei", sans-serif`;
-      const text = description.trim();
-      const textWidth = ctx.measureText(text).width;
-      const paddingX = fontSize * 0.6;
-      const paddingY = fontSize * 0.4;
-      const bgX = paddingX;
-      const bgY = canvas.height - fontSize - paddingY * 2;
-      const bgWidth = textWidth + paddingX * 2;
-      const bgHeight = fontSize + paddingY * 2;
-      ctx.fillStyle = 'rgba(0,0,0,0.65)';
-      ctx.beginPath();
-      ctx.roundRect(bgX, bgY, bgWidth, bgHeight, fontSize * 0.3);
-      ctx.fill();
-      ctx.fillStyle = '#ffffff';
-      ctx.textBaseline = 'bottom';
-      ctx.textAlign = 'left';
-      ctx.fillText(text, bgX + paddingX, canvas.height - paddingY);
-      resolve(canvas.toDataURL('image/png'));
-    };
-    img.onerror = reject;
-    img.src = imageDataUrl;
-  });
-}
-
-function injectDownloadUI(container) {
-  if (container.querySelector('.auto-download-ui')) return null;
-  const img = container.querySelector('img');
-  if (!img) return null;
-  const uiContainer = document.createElement('div');
-  uiContainer.className = 'auto-download-ui';
-  uiContainer.style.marginTop = '12px';
-  const descInput = document.createElement('input');
-  descInput.type = 'text';
-  descInput.placeholder = '添加描述（显示在图片左下角）';
-  descInput.style.cssText = 'width:100%; max-width:320px; padding:8px 12px; border-radius:20px; border:1px solid var(--border); background:var(--surface2); color:var(--text); font-size:0.85rem; outline:none;';
-  const downloadBtn = document.createElement('button');
-  downloadBtn.className = 'btn btn-accent';
-  downloadBtn.textContent = '⬇️ 下载PNG（含描述）';
-  downloadBtn.style.marginTop = '8px';
-  downloadBtn.addEventListener('click', async () => {
-    const imageUrl = img.src;
-    if (!imageUrl) { showToast('暂无图片可下载'); return; }
-    const desc = descInput.value;
-    const finalUrl = await addDescriptionToImage(imageUrl, desc);
-    const a = document.createElement('a');
-    a.href = finalUrl;
-    a.download = 'image.png';
-    a.click();
-  });
-  uiContainer.appendChild(descInput);
-  uiContainer.appendChild(downloadBtn);
-  container.appendChild(uiContainer);
-  return { descInput, downloadBtn };
-}
-
-function observePanelForDownloadableImages(panel) {
-  if (panel._downloadObserver) panel._downloadObserver.disconnect();
-  const observer = new MutationObserver(() => {
-    const areas = panel.querySelectorAll('.result-area.show, .result-area[style*="display: block"]');
-    areas.forEach(area => injectDownloadUI(area));
-  });
-  observer.observe(panel, { childList: true, subtree: true, attributes: true, attributeFilter: ['class', 'style'] });
-  panel._downloadObserver = observer;
-  const existingAreas = panel.querySelectorAll('.result-area.show, .result-area[style*="display: block"]');
-  existingAreas.forEach(area => injectDownloadUI(area));
-}
+<script src="plugin-list.js"></script>
+<script src="plugin-loader.js"></script>
+</body>
+</html>
