@@ -17,7 +17,13 @@ const PLUGIN_LIST = [
     script: 'plugins/lsb-stego.js',
     badge: ''
   }
-  // 示例：未来添加新玩法
+  {
+  id: 'image-scramble',
+  name: '图片混淆',
+  icon: '🌀',
+  script: 'plugins/image-scramble.js',
+  badge: ''
+}// 示例：未来添加新玩法
   // {
   //   id: 'ascii-art',
   //   name: 'ASCII 艺术',
