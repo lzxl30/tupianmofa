@@ -83,10 +83,10 @@ registerPlugin({
           <button class="btn btn-outline" id="scrambleEncBtn">🔀 混淆</button>
           <button class="btn btn-outline" id="scrambleDecBtn">🔁 解混淆</button>
           <button class="btn btn-outline" id="scrambleRestoreBtn">↩️ 还原</button>
-          <button class="btn btn-accent" id="scrambleDownloadBtn">⬇️ 下载</button>
         </div>
 
-        <div style="width:100%; text-align:center;">
+        <!-- 关键：加上 class="result-area show" 让框架自动注入描述下载UI -->
+        <div class="result-area show" style="width:100%; text-align:center;">
           <img id="scramblePreview" style="max-width:100%; max-height:60vh; display:none; border-radius:12px; box-shadow:0 4px 16px rgba(0,0,0,0.4); object-fit:contain;">
         </div>
 
@@ -109,15 +109,12 @@ function initScrambleEvents(container) {
   const encBtn = container.querySelector('#scrambleEncBtn');
   const decBtn = container.querySelector('#scrambleDecBtn');
   const restoreBtn = container.querySelector('#scrambleRestoreBtn');
-  const downloadBtn = container.querySelector('#scrambleDownloadBtn');
 
   let originalFile = null;
   let currentImageUrl = null;
 
-  // 点击选择按钮触发文件选择
   selectBtn.addEventListener('click', () => fileInput.click());
 
-  // 文件选择
   fileInput.addEventListener('change', () => {
     if (fileInput.files.length > 0) {
       originalFile = fileInput.files[0];
@@ -127,7 +124,6 @@ function initScrambleEvents(container) {
     }
   });
 
-  // 设置预览
   function setPreview(url) {
     if (currentImageUrl && currentImageUrl.startsWith('blob:')) {
       URL.revokeObjectURL(currentImageUrl);
@@ -137,7 +133,6 @@ function initScrambleEvents(container) {
     previewImg.style.display = 'block';
   }
 
-  // 从当前预览图片获取 Image 对象
   function getCurrentImage() {
     return new Promise((resolve, reject) => {
       if (!previewImg.src || previewImg.style.display === 'none') {
@@ -150,13 +145,10 @@ function initScrambleEvents(container) {
     });
   }
 
-  // 核心处理函数（加密/解密）
   async function processImage(mode) {
     try {
       const img = await getCurrentImage();
-      // 隐藏预览，避免闪烁
       previewImg.style.display = 'none';
-      // 使用 requestAnimationFrame 确保界面更新
       await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
 
       const canvas = document.createElement('canvas');
@@ -177,17 +169,14 @@ function initScrambleEvents(container) {
         const newP = 4 * (newPos[0] + newPos[1] * width);
 
         if (mode === 'encrypt') {
-          // 混淆：将 oldPos 处的像素移动到 newPos
           outputData.data.set(imageData.data.slice(oldP, oldP + 4), newP);
         } else {
-          // 解混淆：反过来
           outputData.data.set(imageData.data.slice(newP, newP + 4), oldP);
         }
       }
 
       ctx.putImageData(outputData, 0, 0);
 
-      // 输出为 JPEG 质量 1（与原算法一致）
       const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', 1));
       const url = URL.createObjectURL(blob);
       setPreview(url);
@@ -198,7 +187,6 @@ function initScrambleEvents(container) {
     }
   }
 
-  // 还原：重新显示原始文件
   restoreBtn.addEventListener('click', () => {
     if (originalFile) {
       setPreview(URL.createObjectURL(originalFile));
@@ -208,23 +196,6 @@ function initScrambleEvents(container) {
     }
   });
 
-  // 混淆按钮
   encBtn.addEventListener('click', () => processImage('encrypt'));
-
-  // 解混淆按钮
   decBtn.addEventListener('click', () => processImage('decrypt'));
-
-  // 下载按钮
-  downloadBtn.addEventListener('click', () => {
-    if (!previewImg.src || previewImg.style.display === 'none') {
-      showToast('没有图片可下载');
-      return;
-    }
-    const a = document.createElement('a');
-    a.href = previewImg.src;
-    a.download = 'processed_image.jpg';
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-  });
 }
