@@ -1,4 +1,4 @@
-// ==================== 光棱坦克（亮度隐藏）插件 ====================
+// ==================== 光棱坦克（亮度双图隐藏）插件 ====================
 registerPlugin({
   id: 'prism-tank',
   name: '光棱坦克',
@@ -8,7 +8,8 @@ registerPlugin({
     container.innerHTML = `
       <h2>🌈 光棱坦克</h2>
       <p style="color:var(--text2);margin-bottom:20px;">
-        将<strong>隐藏图</strong>编码到<strong>表面图</strong>的亮度中。正常看是表面图，调整亮度后隐藏图浮现。
+        将<strong>隐藏图</strong>编码到<strong>表面图</strong>中。<br>
+        正常亮度看是表面图；<strong>把亮度调到最低或最高</strong>，表面图隐去，隐藏图浮现。
       </p>
       <div class="upload-grid" style="display:grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap:16px; margin-bottom:20px;">
         <div class="upload-zone" id="prismSurfaceZone">
@@ -28,19 +29,19 @@ registerPlugin({
         <button class="btn btn-primary" id="prismGenerateBtn" disabled>🌈 生成光棱坦克</button>
       </div>
       <div class="result-area" id="prismResultArea" style="display:none;">
-        <p style="color:var(--accent2); font-weight:bold;">✅ 光棱坦克生成成功！</p>
+        <p style="color:var(--accent2); font-weight:bold;">✅ 生成成功！</p>
+        <img id="prismResultImg" style="max-width:100%; max-height:50vh; border-radius:12px; box-shadow:0 4px 16px rgba(0,0,0,0.4);">
         <div style="margin:12px 0;">
-          <img id="prismResultImg" style="max-width:100%; max-height:50vh; border-radius:12px; box-shadow:0 4px 16px rgba(0,0,0,0.4);">
+          <span style="font-size:0.85rem; color:var(--text2);">🔅 模拟亮度调节</span><br>
+          <input type="range" id="prismBrightnessSlider" min="-100" max="100" value="0" style="width:90%; max-width:300px;">
+          <div id="prismBrightnessLabel" style="font-size:0.9rem; color:var(--accent2);">0</div>
         </div>
-        <div style="margin:12px 0; display:flex; align-items:center; gap:10px; justify-content:center; flex-wrap:wrap;">
-          <span style="font-size:0.85rem; color:var(--text2);">🔅 模拟亮度调节：</span>
-          <input type="range" id="prismBrightnessSlider" min="-100" max="100" value="0" style="width:200px;">
-          <span id="prismBrightnessLabel" style="font-size:0.85rem; color:var(--accent2); min-width:45px;">0%</span>
-        </div>
-        <p style="font-size:0.75rem; color:var(--text2);">拖动滑块预览隐藏效果。下载的是原始图片，可用其他工具调整亮度查看。</p>
+        <p style="font-size:0.8rem; color:var(--text2);">
+          👈 左拉（变暗）或 右拉（变亮）到尽头，隐藏图就会出来。
+        </p>
       </div>
       <div class="tip-bar">
-        💡 <strong>玩法说明：</strong>下载图片后，使用手机相册编辑功能或修图软件调整<strong>亮度/对比度</strong>，即可看到隐藏图浮现。也可左右拖动上方滑块预览效果。
+        💡 <strong>手机查看：</strong>下载图片后，用相册编辑把<strong>亮度</strong>拉到底，或<strong>对比度</strong>拉满，隐藏图就出现了。保持 PNG 画质。
       </div>
     `;
 
@@ -50,7 +51,6 @@ registerPlugin({
 });
 
 function initPrismTankEvents(container) {
-  // 辅助：加载图片
   function loadImageFromFile(file) {
     return new Promise((resolve, reject) => {
       const reader = new FileReader();
@@ -65,7 +65,6 @@ function initPrismTankEvents(container) {
     });
   }
 
-  // 上传区域通用逻辑
   function setupUpload(zoneId, inputId, onChange) {
     const zone = container.querySelector(`#${zoneId}`);
     const input = container.querySelector(`#${inputId}`);
@@ -124,7 +123,7 @@ function initPrismTankEvents(container) {
   const generateBtn = container.querySelector('#prismGenerateBtn');
   function updateBtn() { generateBtn.disabled = !(surfaceImg && hiddenImg); }
 
-  // RGB 转 HSL（h:0-360, s:0-1, l:0-1）
+  // RGB 转 HSL
   function rgbToHsl(r, g, b) {
     r /= 255; g /= 255; b /= 255;
     const max = Math.max(r, g, b), min = Math.min(r, g, b);
@@ -142,7 +141,6 @@ function initPrismTankEvents(container) {
     return [h * 360, s, l];
   }
 
-  // HSL 转 RGB
   function hslToRgb(h, s, l) {
     h /= 360;
     let r, g, b;
@@ -165,12 +163,11 @@ function initPrismTankEvents(container) {
     return [Math.round(r * 255), Math.round(g * 255), Math.round(b * 255)];
   }
 
-  // 生成光棱坦克合成图
-  function generatePrismTank(surface, hidden, strength = 0.08) {
+  // 生成光棱坦克图片（嵌入强度默认0.25）
+  function generatePrismTank(surface, hidden, strength = 0.25) {
     const w = surface.width;
     const h = surface.height;
 
-    // 将两张图绘制到相同尺寸
     const surfCanvas = document.createElement('canvas');
     surfCanvas.width = w; surfCanvas.height = h;
     const sCtx = surfCanvas.getContext('2d');
@@ -189,18 +186,16 @@ function initPrismTankEvents(container) {
     const oPix = outData.data;
 
     for (let i = 0; i < sPix.length; i += 4) {
-      // 表面图像素的 HSL
+      // 表面图像素 HSL
       const [hSl, sSl, lSl] = rgbToHsl(sPix[i], sPix[i+1], sPix[i+2]);
 
-      // 隐藏图像素灰度
+      // 隐藏图灰度
       const gray = 0.299 * hPix[i] + 0.587 * hPix[i+1] + 0.114 * hPix[i+2];
-      // 将灰度映射到 -0.5 到 0.5 的调整量
-      const adjust = (gray / 255 - 0.5) * strength * 2; // strength 控制强度
-      // 修改亮度，限制在 0-1 之间
+      // 映射为 -1 到 1 的调整量（灰度越深越负，越浅越正）
+      const adjust = (gray / 255 - 0.5) * strength * 2.5;
       let newL = lSl + adjust;
       newL = Math.max(0, Math.min(1, newL));
 
-      // 转回 RGB
       const [r, g, b] = hslToRgb(hSl, sSl, newL);
       oPix[i] = r;
       oPix[i+1] = g;
@@ -214,23 +209,20 @@ function initPrismTankEvents(container) {
     return outCanvas.toDataURL('image/png');
   }
 
-  // 存储生成结果
   let generatedDataUrl = null;
-  // 存储表面图亮度调整用的原始像素数据（用于快速滑块渲染）
-  let originalPixels = null;
-  let imageWidth = 0, imageHeight = 0;
+  let originalPixels = null, imageWidth = 0, imageHeight = 0;
 
   generateBtn.addEventListener('click', () => {
     if (!surfaceImg || !hiddenImg) return;
     try {
-      generatedDataUrl = generatePrismTank(surfaceImg, hiddenImg, 0.1);
+      generatedDataUrl = generatePrismTank(surfaceImg, hiddenImg, 0.25);
       const resultArea = container.querySelector('#prismResultArea');
       const resultImg = container.querySelector('#prismResultImg');
       resultImg.src = generatedDataUrl;
       resultArea.style.display = 'block';
       resultArea.classList.add('show');
 
-      // 为了快速调整亮度预览，保存图像数据
+      // 缓存原始数据用于快速滑块预览
       const tmpCanvas = document.createElement('canvas');
       const tmpCtx = tmpCanvas.getContext('2d');
       const img = new Image();
@@ -241,7 +233,6 @@ function initPrismTankEvents(container) {
         imageWidth = img.width;
         imageHeight = img.height;
         originalPixels = tmpCtx.getImageData(0, 0, imageWidth, imageHeight);
-        // 触发一次滑块初始渲染
         updateBrightnessPreview(0);
       };
       img.src = generatedDataUrl;
@@ -253,7 +244,6 @@ function initPrismTankEvents(container) {
     }
   });
 
-  // 亮度滑块逻辑
   const brightnessSlider = container.querySelector('#prismBrightnessSlider');
   const brightnessLabel = container.querySelector('#prismBrightnessLabel');
   const previewImg = container.querySelector('#prismResultImg');
@@ -265,24 +255,44 @@ function initPrismTankEvents(container) {
     canvas.height = imageHeight;
     const ctx = canvas.getContext('2d');
     const outData = new ImageData(imageWidth, imageHeight);
-    const srcData = originalPixels.data;
-    const dstData = outData.data;
-    const adjust = value / 100; // -1 到 1
+    const src = originalPixels.data;
+    const dst = outData.data;
 
-    for (let i = 0; i < srcData.length; i += 4) {
-      if (adjust >= 0) {
-        // 提高亮度：线性插值到255
-        dstData[i] = Math.min(255, Math.round(srcData[i] + (255 - srcData[i]) * adjust));
-        dstData[i+1] = Math.min(255, Math.round(srcData[i+1] + (255 - srcData[i+1]) * adjust));
-        dstData[i+2] = Math.min(255, Math.round(srcData[i+2] + (255 - srcData[i+2]) * adjust));
+    // 将滑块值映射为极端非线性变换
+    const t = value / 100; // -1 到 1
+    const absT = Math.abs(t);
+    // 强度因子：超过60%开始急剧变化，模拟“切换”效果
+    const factor = absT < 0.6 ? absT * 1.5 : 1.0 + (absT - 0.6) * 5; // 最大约3倍
+
+    for (let i = 0; i < src.length; i += 4) {
+      let r = src[i], g = src[i+1], b = src[i+2];
+      if (t < 0) {
+        // 降低亮度：大幅压暗，并增强对比度，让表面图变黑，暗部细节（隐藏图）弹出
+        const darken = 1 - factor * 0.9;
+        r = Math.max(0, Math.round(r * darken));
+        g = Math.max(0, Math.round(g * darken));
+        b = Math.max(0, Math.round(b * darken));
+        // 再增强剩余对比度
+        const avg = (r + g + b) / 3;
+        r = Math.min(255, Math.max(0, avg + (r - avg) * 2.5));
+        g = Math.min(255, Math.max(0, avg + (g - avg) * 2.5));
+        b = Math.min(255, Math.max(0, avg + (b - avg) * 2.5));
       } else {
-        // 降低亮度：线性插值到0
-        const factor = 1 + adjust; // 0 到 1
-        dstData[i] = Math.max(0, Math.round(srcData[i] * factor));
-        dstData[i+1] = Math.max(0, Math.round(srcData[i+1] * factor));
-        dstData[i+2] = Math.max(0, Math.round(srcData[i+2] * factor));
+        // 提高亮度：大幅提亮，过曝表面图，暗部细节消失，隐藏图的亮部浮现
+        const lighten = 1 + factor * 1.2;
+        r = Math.min(255, Math.round(r * lighten));
+        g = Math.min(255, Math.round(g * lighten));
+        b = Math.min(255, Math.round(b * lighten));
+        // 增强对比度，让隐藏图亮部更突出
+        const avg = (r + g + b) / 3;
+        r = Math.min(255, Math.max(0, avg + (r - avg) * 2.5));
+        g = Math.min(255, Math.max(0, avg + (g - avg) * 2.5));
+        b = Math.min(255, Math.max(0, avg + (b - avg) * 2.5));
       }
-      dstData[i+3] = 255;
+      dst[i] = r;
+      dst[i+1] = g;
+      dst[i+2] = b;
+      dst[i+3] = 255;
     }
     ctx.putImageData(outData, 0, 0);
     previewImg.src = canvas.toDataURL();
@@ -290,7 +300,7 @@ function initPrismTankEvents(container) {
 
   brightnessSlider.addEventListener('input', () => {
     const val = parseInt(brightnessSlider.value, 10);
-    brightnessLabel.textContent = val + '%';
+    brightnessLabel.textContent = (val > 0 ? '+' : '') + val + '%';
     updateBrightnessPreview(val);
   });
 }
