@@ -65,7 +65,7 @@ registerPlugin({
   id: 'image-scramble',
   name: '图片混淆',
   icon: '🌀',
-  badge: '',
+  badge: '新',
   render(container) {
     container.innerHTML = `
       <div style="display:flex; flex-direction:column; align-items:center; gap:16px;">
