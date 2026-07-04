@@ -137,7 +137,7 @@
             background: rgba(255,215,0,0.04);
         }
 
-        /* 面板容器 - 占据剩余空间 */
+        /* 面板容器 */
         #panelsContainer {
             flex: 1;
             min-height: 0;
@@ -165,7 +165,7 @@
             to { opacity: 1; transform: translateY(0); }
         }
 
-        /* 面板内部内容应该可滚动，但整体面板不超出 */
+        /* 面板内部内容可滚动 */
         .panel > * { flex-shrink: 0; }
         .panel .plugin-content { flex: 1; min-height: 0; overflow-y: auto; }
 
@@ -316,6 +316,38 @@
         @keyframes toastIn { from { opacity: 0; transform: translateX(-50%) translateY(-20px); } to { opacity: 1; transform: translateX(-50%) translateY(0); } }
         @keyframes toastOut { from { opacity: 1; } to { opacity: 0; transform: translateX(-50%) translateY(-20px); } }
 
+        /* 底部频道链接 */
+        .footer-links {
+            display: flex;
+            gap: 10px;
+            justify-content: center;
+            align-items: center;
+            flex-shrink: 0;
+            padding: 8px 0 4px;
+        }
+        .footer-link-btn {
+            padding: 8px 18px;
+            border-radius: 25px;
+            font-size: 0.8rem;
+            font-weight: 600;
+            background: rgba(255,255,255,0.06);
+            backdrop-filter: blur(10px);
+            border: 1px solid var(--border);
+            color: var(--text2);
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            transition: var(--transition);
+            white-space: nowrap;
+        }
+        .footer-link-btn:hover {
+            background: rgba(139,116,255,0.15);
+            border-color: var(--accent);
+            color: #fff;
+            transform: translateY(-1px);
+        }
+
         /* 手机端进一步压缩 */
         @media (max-width: 640px) {
             body { padding: 8px; }
@@ -327,6 +359,7 @@
             .upload-zone .placeholder-icon { font-size: 28px; }
             .btn { padding: 7px 18px; font-size: 0.85rem; }
             .result-area img { max-width: 160px; }
+            .footer-link-btn { padding: 6px 14px; font-size: 0.75rem; }
         }
     </style>
 </head>
@@ -335,10 +368,20 @@
     <div class="header">
         <div class="icon-row">🖼️✨🔮</div>
         <h1>图片魔法工具箱</h1>
-        <p class="subtitle">幻影坦克 · LSB隐写术 · 更多玩法扩展中</p>
+        <p class="subtitle">更多玩法扩展中</p>
     </div>
     <nav class="nav-tabs" id="navTabs"></nav>
     <div id="panelsContainer"></div>
+
+    <!-- 底部频道链接按钮 -->
+    <div class="footer-links">
+        <a href="https://pd.qq.com/s/gdfnlttnh?b=9" target="_blank" class="footer-link-btn">
+            🎮 次元ACG
+        </a>
+        <a href="https://pd.qq.com/s/4xkjrfjz1?b=9" target="_blank" class="footer-link-btn">
+            🌸 米游途
+        </a>
+    </div>
 </div>
 <div id="toastContainer"></div>
 
