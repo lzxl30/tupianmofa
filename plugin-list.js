@@ -25,6 +25,6 @@ const PLUGIN_LIST = [
   name: '光棱坦克',
   icon: '🌈',
   script: 'plugins/prism-tank.js',
-  badge: '新'
+  badge: ''
   }
 ];
