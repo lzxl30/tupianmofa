@@ -156,6 +156,7 @@ if (!CanvasRenderingContext2D.prototype.roundRect) {
 
 /**
  * 将描述文字合成到图片左下角，返回新的 DataURL
+ * （字体已调小：宽度系数从 30 → 40，最小字号从 14 → 12）
  */
 function addDescriptionToImage(imageDataUrl, description) {
   return new Promise((resolve, reject) => {
@@ -171,7 +172,8 @@ function addDescriptionToImage(imageDataUrl, description) {
       canvas.height = img.height;
       ctx.drawImage(img, 0, 0);
 
-      const fontSize = Math.max(14, Math.floor(img.width / 30));
+      // 调整后的字体大小：更小，但保持清晰
+      const fontSize = Math.max(12, Math.floor(img.width / 40));
       ctx.font = `bold ${fontSize}px "PingFang SC", "Microsoft YaHei", sans-serif`;
       const text = description.trim();
       const textWidth = ctx.measureText(text).width;
@@ -203,7 +205,6 @@ function addDescriptionToImage(imageDataUrl, description) {
  * 在指定容器中创建描述+下载UI，并自动关联容器内的第一张图片
  */
 function injectDownloadUI(container) {
-  // 防止重复注入
   if (container.querySelector('.auto-download-ui')) return null;
 
   const img = container.querySelector('img');
@@ -248,13 +249,11 @@ function injectDownloadUI(container) {
  * 监视面板中出现的 .result-area.show，自动注入描述下载UI
  */
 function observePanelForDownloadableImages(panel) {
-  // 断开旧的观察器（如果存在）
   if (panel._downloadObserver) {
     panel._downloadObserver.disconnect();
   }
 
   const observer = new MutationObserver(() => {
-    // 查找所有已显示的结果区域
     const resultAreas = panel.querySelectorAll('.result-area.show, .result-area[style*="display: block"]');
     resultAreas.forEach(area => {
       injectDownloadUI(area);
@@ -270,7 +269,6 @@ function observePanelForDownloadableImages(panel) {
 
   panel._downloadObserver = observer;
 
-  // 立即处理已经存在的结果区域（比如插件在 render 时直接显示了结果）
   const existingAreas = panel.querySelectorAll('.result-area.show, .result-area[style*="display: block"]');
   existingAreas.forEach(area => {
     injectDownloadUI(area);
