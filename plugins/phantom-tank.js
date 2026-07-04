@@ -26,7 +26,7 @@ registerPlugin({
       <div class="btn-row">
         <button class="btn btn-primary" id="phantomGenerateBtn" disabled>🎭 生成幻影坦克</button>
       </div>
-      <div class="result-area" id="phantomResultArea">
+      <div class="result-area" id="phantomResultArea" style="display:none;">
         <p style="color:var(--accent2); font-weight:bold;">✅ 幻影坦克生成成功！</p>
         <div class="phantom-previews" style="display:flex; flex-wrap:wrap; gap:16px; justify-content:center; margin:16px 0;">
           <div style="background:#fff; padding:12px; border-radius:8px; flex:1 1 180px; max-width:220px;">
@@ -46,7 +46,6 @@ registerPlugin({
           </div>
         </div>
         <div class="btn-row">
-          <a class="btn btn-accent" id="phantomDownloadBtn" download="phantom_tank.png">⬇️ 下载PNG</a>
           <button class="btn btn-outline" id="phantomRetryBtn">🔄 重新生成</button>
         </div>
       </div>
@@ -57,13 +56,10 @@ registerPlugin({
 
     initPhantomEvents(container);
   },
-  destroy() {
-    // 无特殊清理
-  }
+  destroy() {}
 });
 
 function initPhantomEvents(container) {
-  // 辅助函数：加载图片
   function loadImageFromFile(file) {
     return new Promise((resolve, reject) => {
       const reader = new FileReader();
@@ -78,7 +74,6 @@ function initPhantomEvents(container) {
     });
   }
 
-  // 上传区域设置
   function setupUpload(zoneId, inputId, onChange) {
     const zone = container.querySelector(`#${zoneId}`);
     const input = container.querySelector(`#${inputId}`);
@@ -106,7 +101,6 @@ function initPhantomEvents(container) {
       try {
         const img = await loadImageFromFile(file);
         currentImg = img;
-        // 清除旧预览
         const oldImg = zone.querySelector('img');
         if (oldImg) oldImg.remove();
         const preview = document.createElement('img');
@@ -143,7 +137,6 @@ function initPhantomEvents(container) {
   const generateBtn = container.querySelector('#phantomGenerateBtn');
   function updateBtn() { generateBtn.disabled = !(surfaceImg && hiddenImg); }
 
-  // 幻影坦克核心算法
   function generatePhantom(surface, hidden) {
     const w = Math.min(surface.width, hidden.width);
     const h = Math.min(surface.height, hidden.height);
@@ -184,13 +177,17 @@ function initPhantomEvents(container) {
     try {
       const dataUrl = generatePhantom(surfaceImg, hiddenImg);
       const resultArea = container.querySelector('#phantomResultArea');
-      resultArea.classList.add('show');
+      resultArea.style.display = 'block';
+      resultArea.classList.add('show'); // 触发框架注入下载UI
+
       container.querySelector('#phantomPreviewLight').src = dataUrl;
       container.querySelector('#phantomPreviewDark').src = dataUrl;
       container.querySelector('#phantomPreviewSlider').src = dataUrl;
-      container.querySelector('#phantomDownloadBtn').href = dataUrl;
-      container.querySelector('#phantomBgSlider').value = 50;
+
+      const slider = container.querySelector('#phantomBgSlider');
+      slider.value = 50;
       updateSliderBg(50);
+
       resultArea.scrollIntoView({ behavior: 'smooth', block: 'center' });
       showToast('🎭 幻影坦克生成成功！');
     } catch (err) {
@@ -207,6 +204,8 @@ function initPhantomEvents(container) {
   slider.addEventListener('input', () => updateSliderBg(parseInt(slider.value)));
 
   container.querySelector('#phantomRetryBtn').addEventListener('click', () => {
-    container.querySelector('#phantomResultArea').classList.remove('show');
+    const resultArea = container.querySelector('#phantomResultArea');
+    resultArea.style.display = 'none';
+    resultArea.classList.remove('show');
   });
 }
