@@ -77,7 +77,11 @@
             opacity: 0.8;
         }
 
-        /* 导航栏 */
+        /* 导航栏容器 */
+        .nav-wrapper {
+            position: relative;
+            flex-shrink: 0;
+        }
         .nav-tabs {
             display: flex;
             gap: 6px;
@@ -85,14 +89,14 @@
             backdrop-filter: blur(14px);
             -webkit-backdrop-filter: blur(14px);
             border-radius: var(--radius);
-            padding: 5px;
+            padding: 5px 50px 5px 5px; /* 右侧留出空间给展开按钮 */
             border: 1px solid var(--border);
             box-shadow: var(--shadow-sm);
             overflow-x: auto;
             -webkit-overflow-scrolling: touch;
             scrollbar-width: thin;
             scrollbar-color: var(--accent) transparent;
-            flex-shrink: 0;
+            white-space: nowrap;
         }
         .nav-tabs::-webkit-scrollbar { height: 3px; }
         .nav-tabs::-webkit-scrollbar-thumb { background: var(--accent); border-radius: 3px; }
@@ -137,6 +141,81 @@
             background: rgba(255,215,0,0.04);
         }
 
+        /* 展开全部按钮 */
+        .nav-more-btn {
+            position: absolute;
+            right: 4px;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 42px;
+            height: 42px;
+            border-radius: 50%;
+            background: rgba(22, 22, 40, 0.8);
+            backdrop-filter: blur(10px);
+            border: 1px solid var(--border);
+            color: var(--text);
+            font-size: 1.2rem;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: var(--transition);
+            z-index: 5;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+        }
+        .nav-more-btn:hover {
+            background: var(--accent);
+            color: #fff;
+            border-color: var(--accent);
+        }
+
+        /* 全部玩法下拉菜单 */
+        .plugin-dropdown {
+            position: absolute;
+            right: 0;
+            top: calc(100% + 8px);
+            background: rgba(20, 20, 35, 0.95);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-sm);
+            padding: 8px;
+            min-width: 220px;
+            max-height: 300px;
+            overflow-y: auto;
+            z-index: 100;
+            box-shadow: 0 12px 32px rgba(0,0,0,0.6);
+            display: none;
+        }
+        .plugin-dropdown.show { display: block; }
+        .plugin-dropdown::-webkit-scrollbar { width: 3px; }
+        .plugin-dropdown::-webkit-scrollbar-thumb { background: var(--accent); border-radius: 3px; }
+        .plugin-dropdown-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 10px 14px;
+            border-radius: 20px;
+            cursor: pointer;
+            color: var(--text);
+            font-size: 0.9rem;
+            transition: background 0.2s;
+            user-select: none;
+        }
+        .plugin-dropdown-item:hover { background: rgba(139,116,255,0.15); }
+        .plugin-dropdown-item .star-btn {
+            font-size: 1rem;
+            cursor: pointer;
+            margin-right: 4px;
+        }
+        .plugin-dropdown-item .badge {
+            font-size: 0.6rem;
+            background: rgba(139,116,255,0.3);
+            padding: 2px 7px;
+            border-radius: 20px;
+            margin-left: auto;
+        }
+
         /* 面板容器 */
         #panelsContainer {
             flex: 1;
@@ -165,11 +244,10 @@
             to { opacity: 1; transform: translateY(0); }
         }
 
-        /* 面板内部内容可滚动 */
         .panel > * { flex-shrink: 0; }
         .panel .plugin-content { flex: 1; min-height: 0; overflow-y: auto; }
 
-        /* 通用上传区域 */
+        /* 上传区域 */
         .upload-zone {
             background: var(--surface2);
             border: 2px dashed var(--border);
@@ -228,7 +306,6 @@
         .upload-zone.has-image .clear-btn { display: block; }
         .upload-zone .clear-btn:hover { background: #e74c3c; }
 
-        /* 按钮 */
         .btn-row {
             display: flex;
             gap: 8px;
@@ -259,7 +336,6 @@
         .btn-accent { background: linear-gradient(135deg, var(--accent2), #38b297); color: #0f0f1a; }
         .btn-outline { background: transparent; border: 2px solid var(--border-active); color: var(--text); }
 
-        /* 结果区 */
         .result-area {
             background: var(--surface2);
             border-radius: var(--radius-sm);
@@ -279,7 +355,6 @@
             box-shadow: 0 4px 12px rgba(0,0,0,0.3);
         }
 
-        /* 提示条 */
         .tip-bar {
             background: rgba(139,116,255,0.06);
             border-left: 3px solid var(--accent);
@@ -348,7 +423,6 @@
             transform: translateY(-1px);
         }
 
-        /* 手机端进一步压缩 */
         @media (max-width: 640px) {
             body { padding: 8px; }
             .header h1 { font-size: 1.4rem; }
@@ -360,6 +434,8 @@
             .btn { padding: 7px 18px; font-size: 0.85rem; }
             .result-area img { max-width: 160px; }
             .footer-link-btn { padding: 6px 14px; font-size: 0.75rem; }
+            .nav-more-btn { width: 36px; height: 36px; font-size: 1rem; }
+            .plugin-dropdown { min-width: 180px; }
         }
     </style>
 </head>
@@ -368,19 +444,19 @@
     <div class="header">
         <div class="icon-row">🖼️✨🔮</div>
         <h1>图片魔法工具箱</h1>
-        <p class="subtitle">更多玩法扩展中</p>
+        <p class="subtitle">幻影坦克 · LSB隐写术 · 更多玩法扩展中</p>
     </div>
-    <nav class="nav-tabs" id="navTabs"></nav>
+    <!-- 导航栏容器，包住 nav-tabs 和展开按钮 -->
+    <div class="nav-wrapper">
+        <nav class="nav-tabs" id="navTabs"></nav>
+        <button class="nav-more-btn" id="navMoreBtn" title="查看全部玩法">▼</button>
+        <div class="plugin-dropdown" id="pluginDropdown"></div>
+    </div>
     <div id="panelsContainer"></div>
 
-    <!-- 底部频道链接按钮 -->
     <div class="footer-links">
-        <a href="https://pd.qq.com/s/gdfnlttnh?b=9" target="_blank" class="footer-link-btn">
-            🎮 次元ACG
-        </a>
-        <a href="https://pd.qq.com/s/4xkjrfjz1?b=9" target="_blank" class="footer-link-btn">
-            🌸 米游途
-        </a>
+        <a href="https://pd.qq.com/s/gdfnlttnh?b=9" target="_blank" class="footer-link-btn">🎮 次元ACG</a>
+        <a href="https://pd.qq.com/s/4xkjrfjz1?b=9" target="_blank" class="footer-link-btn">🌸 米游途</a>
     </div>
 </div>
 <div id="toastContainer"></div>
