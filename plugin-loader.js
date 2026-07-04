@@ -1,16 +1,11 @@
-// ==================== 核心框架：插件加载 & 标星置顶 & 自动描述下载 ====================
+// ==================== 核心框架：插件加载 & 标星置顶 & 自动描述下载 & 全部玩法菜单 ====================
 const STORAGE_KEY = 'toolbox_starred_plugins';
 
-// 收藏管理
 function getStarredPlugins() {
-  try {
-    const data = localStorage.getItem(STORAGE_KEY);
-    return data ? JSON.parse(data) : [];
-  } catch { return []; }
+  try { const data = localStorage.getItem(STORAGE_KEY); return data ? JSON.parse(data) : []; }
+  catch { return []; }
 }
-function saveStarredPlugins(list) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(list));
-}
+function saveStarredPlugins(list) { localStorage.setItem(STORAGE_KEY, JSON.stringify(list)); }
 function toggleStar(pluginId) {
   const starred = getStarredPlugins();
   const index = starred.indexOf(pluginId);
@@ -23,35 +18,28 @@ function toggleStar(pluginId) {
 const pluginRegistry = [];
 let currentPlugin = null;
 
-function registerPlugin(plugin) {
-  pluginRegistry.push(plugin);
-}
+function registerPlugin(plugin) { pluginRegistry.push(plugin); }
 
-// Toast 提示
 function showToast(msg, duration = 2500) {
   const container = document.getElementById('toastContainer');
   const toast = document.createElement('div');
   toast.className = 'toast';
   toast.textContent = msg;
   container.appendChild(toast);
-  setTimeout(() => {
-    if (toast.parentNode) toast.parentNode.removeChild(toast);
-  }, duration + 400);
+  setTimeout(() => { if (toast.parentNode) toast.parentNode.removeChild(toast); }, duration + 400);
 }
 
-// 按收藏排序
 function sortPluginsByStar(plugins) {
   const starred = getStarredPlugins();
-  const starredPlugins = [];
-  const normalPlugins = [];
+  const starredP = [], normalP = [];
   plugins.forEach(p => {
-    if (starred.includes(p.id)) starredPlugins.push(p);
-    else normalPlugins.push(p);
+    if (starred.includes(p.id)) starredP.push(p);
+    else normalP.push(p);
   });
-  return [...starredPlugins, ...normalPlugins];
+  return [...starredP, ...normalP];
 }
 
-// 构建导航和面板
+// ==================== 构建UI ====================
 function buildUI() {
   const navContainer = document.getElementById('navTabs');
   const panelsContainer = document.getElementById('panelsContainer');
@@ -74,6 +62,7 @@ function buildUI() {
     btn.addEventListener('click', (e) => {
       if (e.target.classList.contains('star-btn') || e.target.closest('.star-btn')) return;
       switchToPlugin(plugin.id);
+      closeDropdown();
     });
     const starBtn = btn.querySelector('.star-btn');
     starBtn.addEventListener('click', (e) => {
@@ -92,9 +81,11 @@ function buildUI() {
   });
 
   if (sortedPlugins.length > 0) switchToPlugin(sortedPlugins[0].id);
+
+  // 构建全部玩法下拉菜单
+  buildDropdown();
 }
 
-// 切换插件
 function switchToPlugin(pluginId) {
   if (currentPlugin && currentPlugin.destroy) currentPlugin.destroy();
   document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
@@ -112,11 +103,9 @@ function switchToPlugin(pluginId) {
   plugin.render(panel);
   currentPlugin = plugin;
 
-  // 为该面板启动自动描述注入观察器
   observePanelForDownloadableImages(panel);
 }
 
-// 加载所有插件脚本
 function loadPlugins() {
   const loadPromises = PLUGIN_LIST.map(item => {
     return new Promise((resolve, reject) => {
@@ -134,9 +123,57 @@ function loadPlugins() {
 
 window.addEventListener('DOMContentLoaded', loadPlugins);
 
-// ==================== 统一描述下载功能 ====================
+// ==================== 展开全部玩法下拉菜单 ====================
+function buildDropdown() {
+  const dropdown = document.getElementById('pluginDropdown');
+  if (!dropdown) return;
+  dropdown.innerHTML = '';
+  const starred = getStarredPlugins();
+  pluginRegistry.forEach(plugin => {
+    const isStarred = starred.includes(plugin.id);
+    const item = document.createElement('div');
+    item.className = 'plugin-dropdown-item';
+    item.innerHTML = `
+      <span class="star-btn" style="font-size:1rem;">${isStarred ? '⭐' : '☆'}</span>
+      ${plugin.icon} ${plugin.name}
+      ${plugin.badge ? `<span class="badge">${plugin.badge}</span>` : ''}
+    `;
+    item.addEventListener('click', (e) => {
+      if (e.target.classList.contains('star-btn')) return;
+      switchToPlugin(plugin.id);
+      closeDropdown();
+    });
+    const starBtn = item.querySelector('.star-btn');
+    starBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      toggleStar(plugin.id);
+      // 重建全部UI和下拉菜单
+      buildUI();
+      if (currentPlugin && currentPlugin.id === plugin.id) switchToPlugin(plugin.id);
+      showToast(getStarredPlugins().includes(plugin.id) ? '⭐ 已置顶' : '已取消置顶');
+    });
+    dropdown.appendChild(item);
+  });
+}
 
-// Canvas roundRect 兼容
+function closeDropdown() {
+  const dropdown = document.getElementById('pluginDropdown');
+  if (dropdown) dropdown.classList.remove('show');
+}
+
+// 点击展开按钮
+document.addEventListener('click', (e) => {
+  const moreBtn = document.getElementById('navMoreBtn');
+  const dropdown = document.getElementById('pluginDropdown');
+  if (!moreBtn || !dropdown) return;
+  if (moreBtn.contains(e.target)) {
+    dropdown.classList.toggle('show');
+  } else if (!dropdown.contains(e.target)) {
+    dropdown.classList.remove('show');
+  }
+});
+
+// ==================== 统一描述下载功能 ====================
 if (!CanvasRenderingContext2D.prototype.roundRect) {
   CanvasRenderingContext2D.prototype.roundRect = function (x, y, w, h, r) {
     if (typeof r === 'number') r = { tl: r, tr: r, br: r, bl: r };
@@ -154,10 +191,6 @@ if (!CanvasRenderingContext2D.prototype.roundRect) {
   };
 }
 
-/**
- * 将描述文字合成到图片左下角，返回新的 DataURL
- * （字体已调小：宽度系数从 30 → 40，最小字号从 14 → 12）
- */
 function addDescriptionToImage(imageDataUrl, description) {
   return new Promise((resolve, reject) => {
     if (!description || description.trim() === '') {
@@ -171,8 +204,6 @@ function addDescriptionToImage(imageDataUrl, description) {
       canvas.width = img.width;
       canvas.height = img.height;
       ctx.drawImage(img, 0, 0);
-
-      // 调整后的字体大小：更小，但保持清晰
       const fontSize = Math.max(12, Math.floor(img.width / 40));
       ctx.font = `bold ${fontSize}px "PingFang SC", "Microsoft YaHei", sans-serif`;
       const text = description.trim();
@@ -183,17 +214,14 @@ function addDescriptionToImage(imageDataUrl, description) {
       const bgY = canvas.height - fontSize - paddingY * 2;
       const bgWidth = textWidth + paddingX * 2;
       const bgHeight = fontSize + paddingY * 2;
-
       ctx.fillStyle = 'rgba(0,0,0,0.65)';
       ctx.beginPath();
       ctx.roundRect(bgX, bgY, bgWidth, bgHeight, fontSize * 0.3);
       ctx.fill();
-
       ctx.fillStyle = '#ffffff';
       ctx.textBaseline = 'bottom';
       ctx.textAlign = 'left';
       ctx.fillText(text, bgX + paddingX, canvas.height - paddingY);
-
       resolve(canvas.toDataURL('image/png'));
     };
     img.onerror = reject;
@@ -201,35 +229,24 @@ function addDescriptionToImage(imageDataUrl, description) {
   });
 }
 
-/**
- * 在指定容器中创建描述+下载UI，并自动关联容器内的第一张图片
- */
 function injectDownloadUI(container) {
   if (container.querySelector('.auto-download-ui')) return null;
-
   const img = container.querySelector('img');
   if (!img) return null;
-
   const uiContainer = document.createElement('div');
   uiContainer.className = 'auto-download-ui';
   uiContainer.style.marginTop = '12px';
-
   const descInput = document.createElement('input');
   descInput.type = 'text';
   descInput.placeholder = '添加描述（显示在图片左下角）';
   descInput.style.cssText = 'width:100%; max-width:320px; padding:8px 12px; border-radius:20px; border:1px solid var(--border); background:var(--surface2); color:var(--text); font-size:0.85rem; outline:none;';
-
   const downloadBtn = document.createElement('button');
   downloadBtn.className = 'btn btn-accent';
   downloadBtn.textContent = '⬇️ 下载PNG（含描述）';
   downloadBtn.style.marginTop = '8px';
-
   downloadBtn.addEventListener('click', async () => {
     const imageUrl = img.src;
-    if (!imageUrl) {
-      showToast('暂无图片可下载');
-      return;
-    }
+    if (!imageUrl) { showToast('暂无图片可下载'); return; }
     const desc = descInput.value;
     const finalUrl = await addDescriptionToImage(imageUrl, desc);
     const a = document.createElement('a');
@@ -237,40 +254,20 @@ function injectDownloadUI(container) {
     a.download = 'image.png';
     a.click();
   });
-
   uiContainer.appendChild(descInput);
   uiContainer.appendChild(downloadBtn);
   container.appendChild(uiContainer);
-
   return { descInput, downloadBtn };
 }
 
-/**
- * 监视面板中出现的 .result-area.show，自动注入描述下载UI
- */
 function observePanelForDownloadableImages(panel) {
-  if (panel._downloadObserver) {
-    panel._downloadObserver.disconnect();
-  }
-
+  if (panel._downloadObserver) panel._downloadObserver.disconnect();
   const observer = new MutationObserver(() => {
-    const resultAreas = panel.querySelectorAll('.result-area.show, .result-area[style*="display: block"]');
-    resultAreas.forEach(area => {
-      injectDownloadUI(area);
-    });
+    const areas = panel.querySelectorAll('.result-area.show, .result-area[style*="display: block"]');
+    areas.forEach(area => injectDownloadUI(area));
   });
-
-  observer.observe(panel, {
-    childList: true,
-    subtree: true,
-    attributes: true,
-    attributeFilter: ['class', 'style']
-  });
-
+  observer.observe(panel, { childList: true, subtree: true, attributes: true, attributeFilter: ['class', 'style'] });
   panel._downloadObserver = observer;
-
   const existingAreas = panel.querySelectorAll('.result-area.show, .result-area[style*="display: block"]');
-  existingAreas.forEach(area => {
-    injectDownloadUI(area);
-  });
+  existingAreas.forEach(area => injectDownloadUI(area));
 }
